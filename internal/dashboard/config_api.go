@@ -273,6 +273,7 @@ func redactToken(cfg config.FileConfig) config.FileConfig {
 	cfg.Security.StateEncryptionKey = nil
 	cfg.AutoSolver.External.CapsolverKey = ""
 	cfg.AutoSolver.External.TwoCaptchaKey = ""
+	cfg.AutoSolver.Credentials = config.AutoSolverCredentialsConf{}
 	return cfg
 }
 
@@ -284,6 +285,31 @@ func preserveWriteOnlyConfigFields(dst, src *config.FileConfig) {
 	dst.Security.StateEncryptionKey = src.Security.StateEncryptionKey
 	dst.AutoSolver.External.CapsolverKey = src.AutoSolver.External.CapsolverKey
 	dst.AutoSolver.External.TwoCaptchaKey = src.AutoSolver.External.TwoCaptchaKey
+	// Credentials are write-only: when the dashboard PUTs config without a
+	// credential field (because GET redacted them), keep the value already
+	// on disk. Per-field so a deliberate set-to-blank still wins.
+	preserveCredString(&dst.AutoSolver.Credentials.Login.User, src.AutoSolver.Credentials.Login.User)
+	preserveCredString(&dst.AutoSolver.Credentials.Login.Password, src.AutoSolver.Credentials.Login.Password)
+	preserveCredString(&dst.AutoSolver.Credentials.Signup.Name, src.AutoSolver.Credentials.Signup.Name)
+	preserveCredString(&dst.AutoSolver.Credentials.Signup.Email, src.AutoSolver.Credentials.Signup.Email)
+	preserveCredString(&dst.AutoSolver.Credentials.Signup.Password, src.AutoSolver.Credentials.Signup.Password)
+	preserveCredString(&dst.AutoSolver.Credentials.Form.Field1, src.AutoSolver.Credentials.Form.Field1)
+	preserveCredString(&dst.AutoSolver.Credentials.Form.Field2, src.AutoSolver.Credentials.Form.Field2)
+	preserveCredString(&dst.AutoSolver.Credentials.Form.Email, src.AutoSolver.Credentials.Form.Email)
+}
+
+// preserveCredString keeps the existing src value when dst is empty (i.e. the
+// PUT didn't include this field because GET redacted it). A deliberate
+// blank from PUT is indistinguishable from "not provided" in JSON without
+// pointer types — given these are credentials, the safer default is to
+// preserve. Callers can clear by writing the JSON file directly.
+func preserveCredString(dst *string, src string) {
+	if dst == nil {
+		return
+	}
+	if *dst == "" {
+		*dst = src
+	}
 }
 
 func (c *ConfigAPI) restartReasonsFor(next config.FileConfig) []string {

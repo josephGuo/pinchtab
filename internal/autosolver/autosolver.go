@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"sort"
 	"time"
 )
@@ -412,9 +411,11 @@ func (as *AutoSolver) trySemantic(ctx context.Context, page Page, executor Actio
 }
 
 type semanticFlowStep struct {
-	Query   string
-	Action  ActionType
-	EnvKeys []string
+	Query  string
+	Action ActionType
+	// Value is the credential the step injects into the matched element when
+	// Action == ActionType_. Empty means the step is just a click/wait.
+	Value string
 }
 
 func (as *AutoSolver) planSemanticAction(intent *Intent, step int, suggested *SuggestedAction) *SuggestedAction {
@@ -425,14 +426,14 @@ func (as *AutoSolver) planSemanticAction(intent *Intent, step int, suggested *Su
 	}
 
 	intentType := intentTypeOf(intent)
-	flowStep := semanticFlowStepForIntent(intentType, step)
+	flowStep := semanticFlowStepForIntent(intentType, step, as.config.Credentials)
 
 	if planned.Action == ActionNone || isHighLevelIntent(intentType) {
 		planned.Action = flowStep.Action
 	}
 
 	if planned.Text == "" && planned.Action == ActionType_ {
-		planned.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+		planned.Text = flowStep.Value
 	}
 
 	if planned.Reason == "" {
@@ -448,7 +449,7 @@ func (as *AutoSolver) prepareSemanticAction(ctx context.Context, page Page, inte
 	}
 
 	resolved := *action
-	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step)
+	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step, as.config.Credentials)
 
 	shouldResolveTarget := isHighLevelIntent(intentTypeOf(intent)) || actionNeedsTarget(&resolved)
 	if shouldResolveTarget {
@@ -472,7 +473,7 @@ func (as *AutoSolver) prepareSemanticAction(ctx context.Context, page Page, inte
 	}
 
 	if resolved.Action == ActionType_ && resolved.Text == "" {
-		resolved.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+		resolved.Text = flowStep.Value
 		if resolved.Text == "" {
 			resolved.Action = ActionClick
 		}
@@ -490,7 +491,7 @@ func (as *AutoSolver) selfHealSemanticAction(ctx context.Context, page Page, int
 		return nil, fmt.Errorf("nil action")
 	}
 
-	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step)
+	flowStep := semanticFlowStepForIntent(intentTypeOf(intent), step, as.config.Credentials)
 	match, err := as.semantic.FindElement(ctx, page, flowStep.Query)
 	if err != nil {
 		return nil, fmt.Errorf("semantic self-heal find query %q: %w", flowStep.Query, err)
@@ -511,7 +512,7 @@ func (as *AutoSolver) selfHealSemanticAction(ctx context.Context, page Page, int
 	}
 
 	if healed.Action == ActionType_ && healed.Text == "" {
-		healed.Text = firstNonEmptyEnv(flowStep.EnvKeys...)
+		healed.Text = flowStep.Value
 		if healed.Text == "" {
 			healed.Action = ActionClick
 		}
@@ -557,7 +558,7 @@ func semanticStepBudget(intentType IntentType) int {
 	}
 }
 
-func semanticFlowStepForIntent(intentType IntentType, step int) semanticFlowStep {
+func semanticFlowStepForIntent(intentType IntentType, step int, creds Credentials) semanticFlowStep {
 	steps := []semanticFlowStep{{Query: "primary continue submit button", Action: ActionClick}}
 
 	switch intentType {
@@ -573,21 +574,21 @@ func semanticFlowStepForIntent(intentType IntentType, step int) semanticFlowStep
 		}
 	case IntentLogin:
 		steps = []semanticFlowStep{
-			{Query: "username email input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_LOGIN_USER", "PINCHTAB_AUTOSOLVER_LOGIN_EMAIL"}},
-			{Query: "password input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_LOGIN_PASS", "PINCHTAB_AUTOSOLVER_LOGIN_PASSWORD"}},
+			{Query: "username email input field", Action: ActionType_, Value: creds.Login.User},
+			{Query: "password input field", Action: ActionType_, Value: creds.Login.Password},
 			{Query: "login submit sign in button", Action: ActionClick},
 		}
 	case IntentSignup:
 		steps = []semanticFlowStep{
-			{Query: "name full name input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_NAME"}},
-			{Query: "email input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_EMAIL"}},
-			{Query: "password create password input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_SIGNUP_PASSWORD"}},
+			{Query: "name full name input field", Action: ActionType_, Value: creds.Signup.Name},
+			{Query: "email input field", Action: ActionType_, Value: creds.Signup.Email},
+			{Query: "password create password input field", Action: ActionType_, Value: creds.Signup.Password},
 			{Query: "sign up register create account submit button", Action: ActionClick},
 		}
 	case IntentForm:
 		steps = []semanticFlowStep{
-			{Query: "first required input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_FORM_FIELD1"}},
-			{Query: "second required input field", Action: ActionType_, EnvKeys: []string{"PINCHTAB_AUTOSOLVER_FORM_FIELD2", "PINCHTAB_AUTOSOLVER_FORM_EMAIL"}},
+			{Query: "first required input field", Action: ActionType_, Value: creds.Form.Field1},
+			{Query: "second required input field", Action: ActionType_, Value: firstNonEmpty(creds.Form.Field2, creds.Form.Email)},
 			{Query: "primary submit button", Action: ActionClick},
 		}
 	case IntentOnboarding:
@@ -614,9 +615,9 @@ func semanticFlowStepForIntent(intentType IntentType, step int) semanticFlowStep
 	return steps[step]
 }
 
-func firstNonEmptyEnv(keys ...string) string {
-	for _, key := range keys {
-		if v := os.Getenv(key); v != "" {
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
 			return v
 		}
 	}

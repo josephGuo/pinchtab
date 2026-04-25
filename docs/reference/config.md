@@ -278,18 +278,32 @@ Current nested file-config shape:
 `autoSolver.external` is config-file-only. Capsolver and 2Captcha credentials
 are stored there.
 
-### Semantic Flow Environment Variables
+### Semantic Flow Credentials
 
-The semantic-first autosolver flow can consume optional environment variables
-for login/signup/form-filling steps:
+The semantic-first autosolver flow injects credential values into recognised
+login/signup/form fields. Configure them under `autoSolver.credentials` in
+the config file:
 
-- `PINCHTAB_AUTOSOLVER_LOGIN_USER` or `PINCHTAB_AUTOSOLVER_LOGIN_EMAIL`: login username/email value
-- `PINCHTAB_AUTOSOLVER_LOGIN_PASS` or `PINCHTAB_AUTOSOLVER_LOGIN_PASSWORD`: login password value
-- `PINCHTAB_AUTOSOLVER_SIGNUP_NAME`: signup full-name value
-- `PINCHTAB_AUTOSOLVER_SIGNUP_EMAIL`: signup email value
-- `PINCHTAB_AUTOSOLVER_SIGNUP_PASSWORD`: signup password value
-- `PINCHTAB_AUTOSOLVER_FORM_FIELD1`: generic form field value (step 1)
-- `PINCHTAB_AUTOSOLVER_FORM_FIELD2` or `PINCHTAB_AUTOSOLVER_FORM_EMAIL`: generic form field/email value (step 2)
+```json
+{
+  "autoSolver": {
+    "credentials": {
+      "login":  { "user": "you@example.com", "password": "..." },
+      "signup": { "name": "Jane Doe", "email": "you@example.com", "password": "..." },
+      "form":   { "field1": "...", "field2": "...", "email": "you@example.com" }
+    }
+  }
+}
+```
+
+Notes:
+
+- Edit credentials by writing the config file directly. The dashboard config API
+  redacts them on read (GET returns blanks) and preserves on-disk values when a
+  PUT comes in with empty fields, so secrets never round-trip through the UI.
+- The form solver step 2 falls back to `form.email` when `form.field2` is empty.
+- Steps without a configured value fall through to a click-only flow (e.g. a
+  login attempt with no password becomes a "click submit" attempt).
 
 The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the

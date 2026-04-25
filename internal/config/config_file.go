@@ -333,23 +333,47 @@ type dashboardSessionConfigJSON struct {
 }
 
 type autoSolverFileConfigJSON struct {
-	Enabled           *bool                   `json:"enabled,omitempty"`
-	AutoTrigger       *bool                   `json:"autoTrigger,omitempty"`
-	TriggerOnNavigate *bool                   `json:"triggerOnNavigate,omitempty"`
-	TriggerOnAction   *bool                   `json:"triggerOnAction,omitempty"`
-	MaxAttempts       *int                    `json:"maxAttempts,omitempty"`
-	SolverTimeoutSec  *int                    `json:"solverTimeoutSec,omitempty"`
-	RetryBaseDelayMs  *int                    `json:"retryBaseDelayMs,omitempty"`
-	RetryMaxDelayMs   *int                    `json:"retryMaxDelayMs,omitempty"`
-	Solvers           []string                `json:"solvers,omitempty"`
-	LLMProvider       string                  `json:"llmProvider,omitempty"`
-	LLMFallback       *bool                   `json:"llmFallback,omitempty"`
-	External          autoSolverExtConfigJSON `json:"external,omitempty"`
+	Enabled           *bool                           `json:"enabled,omitempty"`
+	AutoTrigger       *bool                           `json:"autoTrigger,omitempty"`
+	TriggerOnNavigate *bool                           `json:"triggerOnNavigate,omitempty"`
+	TriggerOnAction   *bool                           `json:"triggerOnAction,omitempty"`
+	MaxAttempts       *int                            `json:"maxAttempts,omitempty"`
+	SolverTimeoutSec  *int                            `json:"solverTimeoutSec,omitempty"`
+	RetryBaseDelayMs  *int                            `json:"retryBaseDelayMs,omitempty"`
+	RetryMaxDelayMs   *int                            `json:"retryMaxDelayMs,omitempty"`
+	Solvers           []string                        `json:"solvers,omitempty"`
+	LLMProvider       string                          `json:"llmProvider,omitempty"`
+	LLMFallback       *bool                           `json:"llmFallback,omitempty"`
+	External          autoSolverExtConfigJSON         `json:"external,omitempty"`
+	Credentials       autoSolverCredentialsConfigJSON `json:"credentials,omitempty"`
 }
 
 type autoSolverExtConfigJSON struct {
 	CapsolverKey  string `json:"capsolverKey,omitempty"`
 	TwoCaptchaKey string `json:"twoCaptchaKey,omitempty"`
+}
+
+type autoSolverCredentialsConfigJSON struct {
+	Login  autoSolverLoginConfigJSON  `json:"login,omitempty"`
+	Signup autoSolverSignupConfigJSON `json:"signup,omitempty"`
+	Form   autoSolverFormConfigJSON   `json:"form,omitempty"`
+}
+
+type autoSolverLoginConfigJSON struct {
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type autoSolverSignupConfigJSON struct {
+	Name     string `json:"name,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type autoSolverFormConfigJSON struct {
+	Field1 string `json:"field1,omitempty"`
+	Field2 string `json:"field2,omitempty"`
+	Email  string `json:"email,omitempty"`
 }
 
 func copyStringSlice(items []string) []string {
@@ -505,6 +529,22 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			External: autoSolverExtConfigJSON{
 				CapsolverKey:  fc.AutoSolver.External.CapsolverKey,
 				TwoCaptchaKey: fc.AutoSolver.External.TwoCaptchaKey,
+			},
+			Credentials: autoSolverCredentialsConfigJSON{
+				Login: autoSolverLoginConfigJSON{
+					User:     fc.AutoSolver.Credentials.Login.User,
+					Password: fc.AutoSolver.Credentials.Login.Password,
+				},
+				Signup: autoSolverSignupConfigJSON{
+					Name:     fc.AutoSolver.Credentials.Signup.Name,
+					Email:    fc.AutoSolver.Credentials.Signup.Email,
+					Password: fc.AutoSolver.Credentials.Signup.Password,
+				},
+				Form: autoSolverFormConfigJSON{
+					Field1: fc.AutoSolver.Credentials.Form.Field1,
+					Field2: fc.AutoSolver.Credentials.Form.Field2,
+					Email:  fc.AutoSolver.Credentials.Form.Email,
+				},
 			},
 		},
 	})
@@ -715,6 +755,22 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			External: AutoSolverExtConf{
 				CapsolverKey:  cfg.AutoSolver.CapsolverKey,
 				TwoCaptchaKey: cfg.AutoSolver.TwoCaptchaKey,
+			},
+			Credentials: AutoSolverCredentialsConf{
+				Login: AutoSolverLoginConf{
+					User:     cfg.AutoSolver.Credentials.Login.User,
+					Password: cfg.AutoSolver.Credentials.Login.Password,
+				},
+				Signup: AutoSolverSignupConf{
+					Name:     cfg.AutoSolver.Credentials.Signup.Name,
+					Email:    cfg.AutoSolver.Credentials.Signup.Email,
+					Password: cfg.AutoSolver.Credentials.Signup.Password,
+				},
+				Form: AutoSolverFormConf{
+					Field1: cfg.AutoSolver.Credentials.Form.Field1,
+					Field2: cfg.AutoSolver.Credentials.Form.Field2,
+					Email:  cfg.AutoSolver.Credentials.Form.Email,
+				},
 			},
 		},
 	}

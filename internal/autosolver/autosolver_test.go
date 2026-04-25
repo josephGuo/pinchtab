@@ -294,11 +294,14 @@ func TestSolve_SemanticFirst_FailureFallsBackToRuleSolvers(t *testing.T) {
 }
 
 func TestSolve_SemanticHighLevel_LoginFlow(t *testing.T) {
-	t.Setenv("PINCHTAB_AUTOSOLVER_LOGIN_USER", "user@example.com")
-	t.Setenv("PINCHTAB_AUTOSOLVER_LOGIN_PASSWORD", "secret")
-
 	cfg := DefaultConfig()
 	cfg.MaxAttempts = 1
+	cfg.Credentials = Credentials{
+		Login: LoginCredentials{
+			User:     "user@example.com",
+			Password: "secret",
+		},
+	}
 
 	semantic := &mockSemantic{
 		detectSeq: []*Intent{

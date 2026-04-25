@@ -530,6 +530,22 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.AutoSolver.CapsolverKey = fc.AutoSolver.External.CapsolverKey
 	cfg.AutoSolver.TwoCaptchaKey = fc.AutoSolver.External.TwoCaptchaKey
+	cfg.AutoSolver.Credentials = AutoSolverCredentials{
+		Login: AutoSolverLoginCreds{
+			User:     fc.AutoSolver.Credentials.Login.User,
+			Password: fc.AutoSolver.Credentials.Login.Password,
+		},
+		Signup: AutoSolverSignupCreds{
+			Name:     fc.AutoSolver.Credentials.Signup.Name,
+			Email:    fc.AutoSolver.Credentials.Signup.Email,
+			Password: fc.AutoSolver.Credentials.Signup.Password,
+		},
+		Form: AutoSolverFormCreds{
+			Field1: fc.AutoSolver.Credentials.Form.Field1,
+			Field2: fc.AutoSolver.Credentials.Form.Field2,
+			Email:  fc.AutoSolver.Credentials.Form.Email,
+		},
+	}
 }
 
 // ApplyFileConfigToRuntime merges file configuration into an existing runtime

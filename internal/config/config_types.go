@@ -170,6 +170,33 @@ type AutoSolverConfig struct {
 	LLMFallback       bool     `json:"llmFallback,omitempty"` // Enable LLM as last resort
 	CapsolverKey      string   `json:"capsolverKey,omitempty"`
 	TwoCaptchaKey     string   `json:"twoCaptchaKey,omitempty"`
+	Credentials       AutoSolverCredentials
+}
+
+// AutoSolverCredentials carries values the semantic solver injects into
+// matched login/signup/form fields. Persisted to the config file but
+// redacted when read back through the dashboard config API.
+type AutoSolverCredentials struct {
+	Login  AutoSolverLoginCreds
+	Signup AutoSolverSignupCreds
+	Form   AutoSolverFormCreds
+}
+
+type AutoSolverLoginCreds struct {
+	User     string
+	Password string
+}
+
+type AutoSolverSignupCreds struct {
+	Name     string
+	Email    string
+	Password string
+}
+
+type AutoSolverFormCreds struct {
+	Field1 string
+	Field2 string
+	Email  string
 }
 
 type ObservabilityConfig struct {
@@ -359,22 +386,49 @@ type ActivityEventsFileConfig struct {
 
 // AutoSolverFileConfig is the persistent configuration for the autosolver system.
 type AutoSolverFileConfig struct {
-	Enabled           *bool             `json:"enabled,omitempty"`
-	AutoTrigger       *bool             `json:"autoTrigger,omitempty"`
-	TriggerOnNavigate *bool             `json:"triggerOnNavigate,omitempty"`
-	TriggerOnAction   *bool             `json:"triggerOnAction,omitempty"`
-	MaxAttempts       *int              `json:"maxAttempts,omitempty"`
-	SolverTimeoutSec  *int              `json:"solverTimeoutSec,omitempty"`
-	RetryBaseDelayMs  *int              `json:"retryBaseDelayMs,omitempty"`
-	RetryMaxDelayMs   *int              `json:"retryMaxDelayMs,omitempty"`
-	Solvers           []string          `json:"solvers,omitempty"`
-	LLMProvider       string            `json:"llmProvider,omitempty"`
-	LLMFallback       *bool             `json:"llmFallback,omitempty"`
-	External          AutoSolverExtConf `json:"external,omitempty"`
+	Enabled           *bool                     `json:"enabled,omitempty"`
+	AutoTrigger       *bool                     `json:"autoTrigger,omitempty"`
+	TriggerOnNavigate *bool                     `json:"triggerOnNavigate,omitempty"`
+	TriggerOnAction   *bool                     `json:"triggerOnAction,omitempty"`
+	MaxAttempts       *int                      `json:"maxAttempts,omitempty"`
+	SolverTimeoutSec  *int                      `json:"solverTimeoutSec,omitempty"`
+	RetryBaseDelayMs  *int                      `json:"retryBaseDelayMs,omitempty"`
+	RetryMaxDelayMs   *int                      `json:"retryMaxDelayMs,omitempty"`
+	Solvers           []string                  `json:"solvers,omitempty"`
+	LLMProvider       string                    `json:"llmProvider,omitempty"`
+	LLMFallback       *bool                     `json:"llmFallback,omitempty"`
+	External          AutoSolverExtConf         `json:"external,omitempty"`
+	Credentials       AutoSolverCredentialsConf `json:"credentials,omitempty"`
 }
 
 // AutoSolverExtConf holds external solver API keys.
 type AutoSolverExtConf struct {
 	CapsolverKey  string `json:"capsolverKey,omitempty"`
 	TwoCaptchaKey string `json:"twoCaptchaKey,omitempty"`
+}
+
+// AutoSolverCredentialsConf is the persisted form of the credentials block.
+// All fields are write-only from the dashboard's perspective: GET /api/config
+// returns them blanked, PUT preserves the on-disk values when blank.
+type AutoSolverCredentialsConf struct {
+	Login  AutoSolverLoginConf  `json:"login,omitempty"`
+	Signup AutoSolverSignupConf `json:"signup,omitempty"`
+	Form   AutoSolverFormConf   `json:"form,omitempty"`
+}
+
+type AutoSolverLoginConf struct {
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type AutoSolverSignupConf struct {
+	Name     string `json:"name,omitempty"`
+	Email    string `json:"email,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type AutoSolverFormConf struct {
+	Field1 string `json:"field1,omitempty"`
+	Field2 string `json:"field2,omitempty"`
+	Email  string `json:"email,omitempty"`
 }

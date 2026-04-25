@@ -208,6 +208,23 @@ func (h *Handlers) normalizedAutoSolverConfig() coreautosolver.Config {
 		}
 	}
 	cfg.LLMFallback = h.Config.AutoSolver.LLMFallback
+	creds := h.Config.AutoSolver.Credentials
+	cfg.Credentials = coreautosolver.Credentials{
+		Login: coreautosolver.LoginCredentials{
+			User:     creds.Login.User,
+			Password: creds.Login.Password,
+		},
+		Signup: coreautosolver.SignupCredentials{
+			Name:     creds.Signup.Name,
+			Email:    creds.Signup.Email,
+			Password: creds.Signup.Password,
+		},
+		Form: coreautosolver.FormCredentials{
+			Field1: creds.Form.Field1,
+			Field2: creds.Form.Field2,
+			Email:  creds.Form.Email,
+		},
+	}
 
 	return cfg
 }

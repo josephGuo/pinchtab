@@ -115,6 +115,33 @@ type LLMResponse struct {
 	Confidence float64    `json:"confidence"`
 }
 
+// Credentials supplies values the semantic solver injects into recognised
+// login/signup/form fields. They live in pinchtab config (write-only,
+// redacted on dashboard read) and are passed through Config rather than
+// pulled from process env vars.
+type Credentials struct {
+	Login  LoginCredentials  `json:"login"`
+	Signup SignupCredentials `json:"signup"`
+	Form   FormCredentials   `json:"form"`
+}
+
+type LoginCredentials struct {
+	User     string `json:"user"`
+	Password string `json:"password"`
+}
+
+type SignupCredentials struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type FormCredentials struct {
+	Field1 string `json:"field1"`
+	Field2 string `json:"field2"`
+	Email  string `json:"email"`
+}
+
 // Config holds autosolver runtime configuration.
 type Config struct {
 	Enabled        bool          `json:"enabled"`
@@ -124,6 +151,7 @@ type Config struct {
 	LLMFallback    bool          `json:"llmFallback"`    // Enable LLM as last resort
 	RetryBaseDelay time.Duration `json:"retryBaseDelay"` // Base delay for exponential backoff
 	RetryMaxDelay  time.Duration `json:"retryMaxDelay"`  // Cap for exponential backoff
+	Credentials    Credentials   `json:"-"`              // Never serialised: redacted secrets
 }
 
 // DefaultConfig returns a Config with sensible defaults.
