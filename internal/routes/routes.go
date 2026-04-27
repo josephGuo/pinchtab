@@ -68,6 +68,7 @@ var coreEndpoints = []Endpoint{
 
 	// Tab management
 	{"POST", "/tab", "Open or switch tab", CapNone, false},
+	{"POST", "/close", "Close tab", CapNone, true},
 	{"POST", "/lock", "Lock tab", CapNone, true},
 	{"POST", "/unlock", "Unlock tab", CapNone, true},
 
@@ -109,6 +110,7 @@ var coreEndpoints = []Endpoint{
 
 	// Solvers
 	{"GET", "/solvers", "List available solvers", CapNone, false},
+	{"GET", "/config/autosolver", "Get autosolver runtime config", CapNone, false},
 	{"POST", "/solve", "Run default solver", CapNone, true},
 	{"POST", "/solve/{name}", "Run named solver", CapNone, true},
 

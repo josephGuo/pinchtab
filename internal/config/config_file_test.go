@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestDefaultFileConfig(t *testing.T) {
@@ -94,6 +95,27 @@ func TestDefaultFileConfig(t *testing.T) {
 	}
 	if fc.Observability.Activity.StateDir != "" {
 		t.Errorf("DefaultFileConfig.Observability.Activity.StateDir = %q, want empty string", fc.Observability.Activity.StateDir)
+	}
+	if fc.AutoSolver.Enabled == nil || *fc.AutoSolver.Enabled {
+		t.Errorf("DefaultFileConfig.AutoSolver.Enabled = %v, want explicit false", formatBoolPtr(fc.AutoSolver.Enabled))
+	}
+	if fc.AutoSolver.AutoTrigger == nil || !*fc.AutoSolver.AutoTrigger {
+		t.Errorf("DefaultFileConfig.AutoSolver.AutoTrigger = %v, want explicit true", formatBoolPtr(fc.AutoSolver.AutoTrigger))
+	}
+	if fc.AutoSolver.TriggerOnNavigate == nil || !*fc.AutoSolver.TriggerOnNavigate {
+		t.Errorf("DefaultFileConfig.AutoSolver.TriggerOnNavigate = %v, want explicit true", formatBoolPtr(fc.AutoSolver.TriggerOnNavigate))
+	}
+	if fc.AutoSolver.TriggerOnAction == nil || !*fc.AutoSolver.TriggerOnAction {
+		t.Errorf("DefaultFileConfig.AutoSolver.TriggerOnAction = %v, want explicit true", formatBoolPtr(fc.AutoSolver.TriggerOnAction))
+	}
+	if fc.AutoSolver.SolverTimeoutSec == nil || *fc.AutoSolver.SolverTimeoutSec != 30 {
+		t.Errorf("DefaultFileConfig.AutoSolver.SolverTimeoutSec = %v, want 30", formatIntPtr(fc.AutoSolver.SolverTimeoutSec))
+	}
+	if fc.AutoSolver.RetryBaseDelayMs == nil || *fc.AutoSolver.RetryBaseDelayMs != 500 {
+		t.Errorf("DefaultFileConfig.AutoSolver.RetryBaseDelayMs = %v, want 500", formatIntPtr(fc.AutoSolver.RetryBaseDelayMs))
+	}
+	if fc.AutoSolver.RetryMaxDelayMs == nil || *fc.AutoSolver.RetryMaxDelayMs != 10000 {
+		t.Errorf("DefaultFileConfig.AutoSolver.RetryMaxDelayMs = %v, want 10000", formatIntPtr(fc.AutoSolver.RetryMaxDelayMs))
 	}
 	if fc.Observability.Activity.Events.Dashboard == nil || *fc.Observability.Activity.Events.Dashboard {
 		t.Errorf("DefaultFileConfig.Observability.Activity.Events.Dashboard = %v, want explicit false", formatBoolPtr(fc.Observability.Activity.Events.Dashboard))
@@ -192,6 +214,31 @@ func TestConvertLegacyConfig(t *testing.T) {
 	}
 	if fc.Timeouts.NavigateSec != 90 {
 		t.Errorf("converted Timeouts.NavigateSec = %v, want 90", fc.Timeouts.NavigateSec)
+	}
+}
+
+func TestTabPolicyDefaultsFromRuntime(t *testing.T) {
+	if got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      5 * time.Minute,
+	}); got != nil {
+		t.Fatalf("default close_idle/5m policy should not be emitted; got %#v", got)
+	}
+
+	got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "keep",
+		TabCloseDelay:      5 * time.Minute,
+	})
+	if got == nil || got.Lifecycle != "keep" || got.CloseDelaySec != nil {
+		t.Fatalf("keep policy = %#v, want lifecycle=keep without delay", got)
+	}
+
+	got = tabPolicyDefaultsFromRuntime(&RuntimeConfig{
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      90 * time.Second,
+	})
+	if got == nil || got.Lifecycle != "close_idle" || got.CloseDelaySec == nil || *got.CloseDelaySec != 90 {
+		t.Fatalf("custom close_idle policy = %#v, want lifecycle=close_idle closeDelaySec=90", got)
 	}
 }
 

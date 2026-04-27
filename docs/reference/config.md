@@ -16,6 +16,7 @@ It currently exposes these high-signal settings directly:
 - `multiInstance.allocationPolicy`
 - `instanceDefaults.stealthLevel`
 - `instanceDefaults.tabEvictionPolicy`
+- `instanceDefaults.tabPolicy.lifecycle`
 
 It also shows:
 
@@ -173,6 +174,11 @@ Current nested file-config shape:
     "noAnimations": false,
     "stealthLevel": "light",
     "tabEvictionPolicy": "close_lru",
+    "tabPolicy": {
+      "lifecycle": "close_idle",
+      "closeDelaySec": 300,
+      "restore": false
+    },
     "dialogAutoAccept": false
   },
   "security": {
@@ -231,7 +237,13 @@ Current nested file-config shape:
   },
   "autoSolver": {
     "enabled": false,
+    "autoTrigger": true,
+    "triggerOnNavigate": true,
+    "triggerOnAction": true,
     "maxAttempts": 8,
+    "solverTimeoutSec": 30,
+    "retryBaseDelayMs": 500,
+    "retryMaxDelayMs": 10000,
     "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
     "llmProvider": "",
     "llmFallback": false,
@@ -272,6 +284,33 @@ Current nested file-config shape:
 `autoSolver.external` is config-file-only. Capsolver and 2Captcha credentials
 are stored there.
 
+### Semantic Flow Credentials
+
+The semantic-first autosolver flow injects credential values into recognised
+login/signup/form fields. Configure them under `autoSolver.credentials` in
+the config file:
+
+```json
+{
+  "autoSolver": {
+    "credentials": {
+      "login":  { "user": "you@example.com", "password": "..." },
+      "signup": { "name": "Jane Doe", "email": "you@example.com", "password": "..." },
+      "form":   { "field1": "...", "field2": "...", "email": "you@example.com" }
+    }
+  }
+}
+```
+
+Notes:
+
+- Edit credentials by writing the config file directly. The dashboard config API
+  redacts them on read (GET returns blanks) and preserves on-disk values when a
+  PUT comes in with empty fields, so secrets never round-trip through the UI.
+- The form solver step 2 falls back to `form.email` when `form.field2` is empty.
+- Steps without a configured value fall through to a click-only flow (e.g. a
+  login attempt with no password becomes a "click submit" attempt).
+
 The dashboard Settings page exposes the non-secret AutoSolver settings and
 shows the active config file path. Provider keys remain managed directly in the
 config file.
@@ -304,6 +343,30 @@ By default, PinchTab looks for unpacked Chrome extensions in `<server.stateDir>/
 - Windows: `%APPDATA%\\pinchtab\\extensions`
 
 You can change or clear that default with `browser.extensionPaths`.
+
+### Tab Policy
+
+`instanceDefaults.tabPolicy` groups tab lifecycle behavior:
+
+```json
+{
+  "instanceDefaults": {
+    "tabPolicy": {
+      "eviction": "close_lru",
+      "lifecycle": "close_idle",
+      "closeDelaySec": 300,
+      "restore": false
+    }
+  }
+}
+```
+
+- `eviction` controls what happens when `maxTabs` is reached: `close_lru`, `close_oldest`, or `reject`.
+- `lifecycle` controls idle lifecycle behavior: `close_idle` auto-closes a tab after it handles an authorized `/text`, `/snapshot`, or `/action` request; `keep` disables lifecycle auto-close.
+- `closeDelaySec` is the idle delay for `close_idle`. The default is `300` seconds.
+- `restore` controls whether session tabs are restored on startup. The default is `false`.
+
+`instanceDefaults.tabEvictionPolicy` is still accepted for compatibility. New configs should use `instanceDefaults.tabPolicy.eviction`.
 
 ## Sections
 
@@ -340,6 +403,7 @@ Use `pinchtab config patch` or edit `config.json` directly for fields such as:
 - `server.networkBufferSize`
 - `browser.extensionPaths`
 - `instanceDefaults.dialogAutoAccept`
+- `instanceDefaults.tabPolicy.*`
 - `security.allowClipboard`
 - `security.idpi.scanTimeoutSec`
 - `security.idpi.shieldThreshold`
@@ -464,6 +528,9 @@ Use `pinchtab config init` to create the current nested format.
 - valid `instanceDefaults.mode`
 - valid `instanceDefaults.stealthLevel`
 - valid `instanceDefaults.tabEvictionPolicy`
+- valid `instanceDefaults.tabPolicy.eviction`
+- valid `instanceDefaults.tabPolicy.lifecycle`
+- non-negative `instanceDefaults.tabPolicy.closeDelaySec`
 - `instanceDefaults.maxTabs >= 1`
 - `instanceDefaults.maxParallelTabs >= 0`
 - valid `multiInstance.strategy`
@@ -484,6 +551,8 @@ Valid enum values:
 | `instanceDefaults.mode` | `headless`, `headed` |
 | `instanceDefaults.stealthLevel` | `light`, `medium`, `full` |
 | `instanceDefaults.tabEvictionPolicy` | `reject`, `close_oldest`, `close_lru` |
+| `instanceDefaults.tabPolicy.eviction` | `reject`, `close_oldest`, `close_lru` |
+| `instanceDefaults.tabPolicy.lifecycle` | `keep`, `close_idle` |
 | `multiInstance.strategy` | `simple`, `explicit`, `simple-autorestart`, `always-on`, `no-instance` |
 | `multiInstance.allocationPolicy` | `fcfs`, `round_robin`, `random` |
 | `security.attach.allowSchemes` | `ws`, `wss`, `http`, `https` |

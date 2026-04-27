@@ -105,6 +105,26 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
+	if tp := fc.InstanceDefaults.TabPolicy; tp != nil {
+		if tp.Eviction != "" && !isValidEvictionPolicy(tp.Eviction) {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.eviction",
+				Message: fmt.Sprintf("invalid value %q (must be reject, close_oldest, or close_lru)", tp.Eviction),
+			})
+		}
+		if tp.Lifecycle != "" && !isValidLifecyclePolicy(tp.Lifecycle) {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.lifecycle",
+				Message: fmt.Sprintf("invalid value %q (must be keep or close_idle)", tp.Lifecycle),
+			})
+		}
+		if tp.CloseDelaySec != nil && *tp.CloseDelaySec < 0 {
+			errs = append(errs, ValidationError{
+				Field:   "instanceDefaults.tabPolicy.closeDelaySec",
+				Message: fmt.Sprintf("must be >= 0 (got %d)", *tp.CloseDelaySec),
+			})
+		}
+	}
 	if fc.InstanceDefaults.MaxTabs != nil && *fc.InstanceDefaults.MaxTabs < 1 {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.maxTabs",
@@ -194,6 +214,47 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
+	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts < 1 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.maxAttempts",
+			Message: fmt.Sprintf("must be >= 1 (got %d)", *fc.AutoSolver.MaxAttempts),
+		})
+	}
+	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec <= 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.solverTimeoutSec",
+			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.AutoSolver.SolverTimeoutSec),
+		})
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryBaseDelayMs",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryBaseDelayMs),
+		})
+	}
+	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs < 0 {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryMaxDelayMs",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *fc.AutoSolver.RetryMaxDelayMs),
+		})
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && fc.AutoSolver.RetryMaxDelayMs != nil &&
+		*fc.AutoSolver.RetryBaseDelayMs > *fc.AutoSolver.RetryMaxDelayMs {
+		errs = append(errs, ValidationError{
+			Field:   "autoSolver.retryBaseDelayMs/retryMaxDelayMs",
+			Message: fmt.Sprintf("retry base delay (%d) must be <= retry max delay (%d)", *fc.AutoSolver.RetryBaseDelayMs, *fc.AutoSolver.RetryMaxDelayMs),
+		})
+	}
+	for _, solverName := range fc.AutoSolver.Solvers {
+		if strings.TrimSpace(solverName) == "" {
+			errs = append(errs, ValidationError{
+				Field:   "autoSolver.solvers",
+				Message: "solver names must not be empty",
+			})
+			break
+		}
+	}
+
 	if fc.Observability.Activity.SessionIdleSec != nil && *fc.Observability.Activity.SessionIdleSec < 0 {
 		errs = append(errs, ValidationError{
 			Field:   "observability.activity.sessionIdleSec",
@@ -229,41 +290,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		errs = append(errs, ValidationError{
 			Field:   "sessions.dashboard.idleTimeoutSec/maxLifetimeSec",
 			Message: fmt.Sprintf("idle timeout (%d) must be <= max lifetime (%d)", *fc.Sessions.Dashboard.IdleTimeoutSec, *fc.Sessions.Dashboard.MaxLifetimeSec),
-		})
-	}
-
-	// AutoSolver validation
-	for _, solver := range fc.AutoSolver.Solvers {
-		switch strings.ToLower(strings.TrimSpace(solver)) {
-		case "":
-			errs = append(errs, ValidationError{
-				Field:   "autoSolver.solvers",
-				Message: "solver name must not be empty",
-			})
-		case "cloudflare", "semantic":
-			// Supported.
-		case "capsolver", "twocaptcha":
-			errs = append(errs, ValidationError{
-				Field:   "autoSolver.solvers",
-				Message: fmt.Sprintf("solver %q is not implemented yet; remove it from autoSolver.solvers", solver),
-			})
-		default:
-			errs = append(errs, ValidationError{
-				Field:   "autoSolver.solvers",
-				Message: fmt.Sprintf("invalid solver %q (supported: cloudflare, semantic)", solver),
-			})
-		}
-	}
-	if fc.AutoSolver.LLMFallback != nil && *fc.AutoSolver.LLMFallback {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.llmFallback",
-			Message: "LLM fallback is not implemented yet and cannot be enabled",
-		})
-	}
-	if strings.TrimSpace(fc.AutoSolver.LLMProvider) != "" {
-		errs = append(errs, ValidationError{
-			Field:   "autoSolver.llmProvider",
-			Message: "LLM provider integration is not implemented yet; leave autoSolver.llmProvider unset",
 		})
 	}
 
@@ -322,6 +348,19 @@ func isValidEvictionPolicy(policy string) bool {
 	default:
 		return false
 	}
+}
+
+func isValidLifecyclePolicy(policy string) bool {
+	switch policy {
+	case "keep", "close_idle":
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidLifecyclePolicies() []string {
+	return []string{"keep", "close_idle"}
 }
 
 func isValidStrategy(strategy string) bool {

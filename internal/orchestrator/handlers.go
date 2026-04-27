@@ -7,6 +7,28 @@ import (
 	"github.com/pinchtab/pinchtab/internal/routes"
 )
 
+// Allows reports whether the given capability is permitted by the orchestrator's
+// current security settings. Centralises the per-capability dispatch so callers
+// don't need their own switch over routes.Capability.
+func (o *Orchestrator) Allows(cap routes.Capability) bool {
+	switch cap {
+	case routes.CapEvaluate:
+		return o.AllowsEvaluate()
+	case routes.CapMacro:
+		return o.AllowsMacro()
+	case routes.CapScreencast:
+		return o.AllowsScreencast()
+	case routes.CapDownload:
+		return o.AllowsDownload()
+	case routes.CapUpload:
+		return o.AllowsUpload()
+	case routes.CapStateExport:
+		return o.AllowsStateExport()
+	default:
+		return false
+	}
+}
+
 func registerCapabilityRoute(mux *http.ServeMux, route string, enabled bool, feature, setting, code string, next http.HandlerFunc) {
 	if enabled {
 		mux.HandleFunc(route, next)
@@ -57,11 +79,8 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 	registerCapabilityRoute(mux, "GET /instances/{id}/proxy/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.handleProxyScreencast)
 	registerCapabilityRoute(mux, "GET /instances/{id}/screencast", o.AllowsScreencast(), "screencast", "security.allowScreencast", "screencast_disabled", o.proxyToInstance)
 
-	// Tab operations - custom handlers
-	mux.HandleFunc("POST /tabs/{id}/close", o.handleTabClose)
-
 	// Tab operations - generic proxy (all route to the appropriate instance).
-	// Sourced from routes.Core() catalogue to stay in sync with bridge and strategy.
+	// Sourced from the shared route catalogue to stay in sync with bridge and strategy.
 	for _, route := range routes.TabScopedRoutes() {
 		mux.HandleFunc(route, o.proxyTabRequest)
 	}

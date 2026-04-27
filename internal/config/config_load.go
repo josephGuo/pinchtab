@@ -5,16 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
-
-var supportedAutoSolverNames = map[string]struct{}{
-	"cloudflare": {},
-	"semantic":   {},
-}
-
-var defaultAutoSolverNames = []string{"cloudflare", "semantic"}
 
 // Load returns the RuntimeConfig with precedence: env vars > config file > defaults.
 func Load() *RuntimeConfig {
@@ -48,25 +40,28 @@ func Load() *RuntimeConfig {
 		MaxRedirects:           -1, // Unlimited by default; set to N to limit redirect hops
 
 		// Browser / instance defaults
-		Headless:          true,
-		NoRestore:         false,
-		ProfileDir:        "",
-		ProfilesBaseDir:   "",
-		DefaultProfile:    "default",
-		ChromeVersion:     "144.0.7559.133",
-		Timezone:          "",
-		BlockImages:       false,
-		BlockMedia:        false,
-		BlockAds:          false,
-		MaxTabs:           20,
-		MaxParallelTabs:   0,
-		ChromeBinary:      "", // Set via config.json only
-		ChromeExtraFlags:  "",
-		ExtensionPaths:    []string{defaultExtensionsDir(userConfigDir())},
-		UserAgent:         "",
-		NoAnimations:      false,
-		StealthLevel:      "light",
-		TabEvictionPolicy: "close_lru",
+		Headless:           true,
+		NoRestore:          false,
+		ProfileDir:         "",
+		ProfilesBaseDir:    "",
+		DefaultProfile:     "default",
+		ChromeVersion:      "144.0.7559.133",
+		Timezone:           "",
+		BlockImages:        false,
+		BlockMedia:         false,
+		BlockAds:           false,
+		MaxTabs:            20,
+		MaxParallelTabs:    0,
+		ChromeBinary:       "", // Set via config.json only
+		ChromeExtraFlags:   "",
+		ExtensionPaths:     []string{defaultExtensionsDir(userConfigDir())},
+		UserAgent:          "",
+		NoAnimations:       false,
+		StealthLevel:       "light",
+		TabEvictionPolicy:  "close_lru",
+		TabLifecyclePolicy: "close_idle",
+		TabCloseDelay:      5 * time.Minute,
+		TabRestore:         false,
 
 		// Timeout defaults
 		ActionTimeout:   30 * time.Second,
@@ -129,10 +124,16 @@ func Load() *RuntimeConfig {
 
 		// AutoSolver defaults (disabled by default)
 		AutoSolver: AutoSolverConfig{
-			Enabled:     false,
-			MaxAttempts: 8,
-			Solvers:     []string{"cloudflare", "semantic"},
-			LLMFallback: false,
+			Enabled:           false,
+			AutoTrigger:       true,
+			TriggerOnNavigate: true,
+			TriggerOnAction:   true,
+			MaxAttempts:       8,
+			SolverTimeoutSec:  30,
+			RetryBaseDelayMs:  500,
+			RetryMaxDelayMs:   10000,
+			Solvers:           []string{"cloudflare", "semantic", "capsolver", "twocaptcha"},
+			LLMFallback:       false,
 		},
 	}
 	finalizeProfileConfig(cfg)
@@ -405,6 +406,24 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.InstanceDefaults.TabEvictionPolicy != "" {
 		cfg.TabEvictionPolicy = fc.InstanceDefaults.TabEvictionPolicy
 	}
+	if tp := fc.InstanceDefaults.TabPolicy; tp != nil {
+		if tp.Eviction != "" {
+			cfg.TabEvictionPolicy = tp.Eviction
+		}
+		if tp.Lifecycle != "" {
+			cfg.TabLifecyclePolicy = tp.Lifecycle
+		}
+		if tp.CloseDelaySec != nil && *tp.CloseDelaySec > 0 {
+			cfg.TabCloseDelay = time.Duration(*tp.CloseDelaySec) * time.Second
+		}
+		if tp.Restore != nil {
+			cfg.TabRestore = *tp.Restore
+		}
+	}
+	// Clamp to a sane minimum to avoid races between handler return and timer fire.
+	if cfg.TabLifecyclePolicy == "close_idle" && cfg.TabCloseDelay < time.Second {
+		cfg.TabCloseDelay = time.Second
+	}
 	if fc.InstanceDefaults.DialogAutoAccept != nil {
 		cfg.DialogAutoAccept = *fc.InstanceDefaults.DialogAutoAccept
 	}
@@ -500,8 +519,26 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	if fc.AutoSolver.Enabled != nil {
 		cfg.AutoSolver.Enabled = *fc.AutoSolver.Enabled
 	}
+	if fc.AutoSolver.AutoTrigger != nil {
+		cfg.AutoSolver.AutoTrigger = *fc.AutoSolver.AutoTrigger
+	}
+	if fc.AutoSolver.TriggerOnNavigate != nil {
+		cfg.AutoSolver.TriggerOnNavigate = *fc.AutoSolver.TriggerOnNavigate
+	}
+	if fc.AutoSolver.TriggerOnAction != nil {
+		cfg.AutoSolver.TriggerOnAction = *fc.AutoSolver.TriggerOnAction
+	}
 	if fc.AutoSolver.MaxAttempts != nil && *fc.AutoSolver.MaxAttempts > 0 {
 		cfg.AutoSolver.MaxAttempts = *fc.AutoSolver.MaxAttempts
+	}
+	if fc.AutoSolver.SolverTimeoutSec != nil && *fc.AutoSolver.SolverTimeoutSec > 0 {
+		cfg.AutoSolver.SolverTimeoutSec = *fc.AutoSolver.SolverTimeoutSec
+	}
+	if fc.AutoSolver.RetryBaseDelayMs != nil && *fc.AutoSolver.RetryBaseDelayMs >= 0 {
+		cfg.AutoSolver.RetryBaseDelayMs = *fc.AutoSolver.RetryBaseDelayMs
+	}
+	if fc.AutoSolver.RetryMaxDelayMs != nil && *fc.AutoSolver.RetryMaxDelayMs >= 0 {
+		cfg.AutoSolver.RetryMaxDelayMs = *fc.AutoSolver.RetryMaxDelayMs
 	}
 	if len(fc.AutoSolver.Solvers) > 0 {
 		cfg.AutoSolver.Solvers = append([]string(nil), fc.AutoSolver.Solvers...)
@@ -514,59 +551,22 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	cfg.AutoSolver.CapsolverKey = fc.AutoSolver.External.CapsolverKey
 	cfg.AutoSolver.TwoCaptchaKey = fc.AutoSolver.External.TwoCaptchaKey
-	sanitizeAutoSolverRuntimeConfig(cfg)
-}
-
-func sanitizeAutoSolverRuntimeConfig(cfg *RuntimeConfig) {
-	if cfg == nil {
-		return
+	cfg.AutoSolver.Credentials = AutoSolverCredentials{
+		Login: AutoSolverLoginCreds{
+			User:     fc.AutoSolver.Credentials.Login.User,
+			Password: fc.AutoSolver.Credentials.Login.Password,
+		},
+		Signup: AutoSolverSignupCreds{
+			Name:     fc.AutoSolver.Credentials.Signup.Name,
+			Email:    fc.AutoSolver.Credentials.Signup.Email,
+			Password: fc.AutoSolver.Credentials.Signup.Password,
+		},
+		Form: AutoSolverFormCreds{
+			Field1: fc.AutoSolver.Credentials.Form.Field1,
+			Field2: fc.AutoSolver.Credentials.Form.Field2,
+			Email:  fc.AutoSolver.Credentials.Form.Email,
+		},
 	}
-
-	sanitized := normalizeAutoSolverNames(cfg.AutoSolver.Solvers)
-	if len(sanitized) == 0 {
-		sanitized = append([]string(nil), defaultAutoSolverNames...)
-	}
-	cfg.AutoSolver.Solvers = sanitized
-
-	if strings.TrimSpace(cfg.AutoSolver.LLMProvider) != "" {
-		slog.Warn("autosolver llmProvider is not implemented; ignoring configured provider",
-			"provider", cfg.AutoSolver.LLMProvider)
-		cfg.AutoSolver.LLMProvider = ""
-	}
-
-	if cfg.AutoSolver.LLMFallback {
-		slog.Warn("autosolver llmFallback is not implemented; forcing disabled")
-		cfg.AutoSolver.LLMFallback = false
-	}
-}
-
-func normalizeAutoSolverNames(raw []string) []string {
-	if len(raw) == 0 {
-		return nil
-	}
-
-	out := make([]string, 0, len(raw))
-	seen := make(map[string]struct{}, len(raw))
-
-	for _, name := range raw {
-		normalized := strings.ToLower(strings.TrimSpace(name))
-		if normalized == "" {
-			continue
-		}
-
-		if _, ok := supportedAutoSolverNames[normalized]; !ok {
-			slog.Warn("autosolver solver is not implemented; ignoring configured solver", "solver", name)
-			continue
-		}
-
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		out = append(out, normalized)
-	}
-
-	return out
 }
 
 // ApplyFileConfigToRuntime merges file configuration into an existing runtime

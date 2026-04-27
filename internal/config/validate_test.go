@@ -514,103 +514,6 @@ func TestValidEnumValues(t *testing.T) {
 	}
 }
 
-func TestValidateFileConfig_AutoSolverUnsupportedSolver(t *testing.T) {
-	fc := &FileConfig{
-		AutoSolver: AutoSolverFileConfig{
-			Solvers: []string{"cloudflare", "capsolver"},
-		},
-	}
-
-	errs := ValidateFileConfig(fc)
-	if len(errs) == 0 {
-		t.Fatal("expected autosolver validation error, got none")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "autoSolver.solvers") &&
-			strings.Contains(err.Error(), "not implemented") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected not implemented solver error, got %v", errs)
-	}
-}
-
-func TestValidateFileConfig_AutoSolverInvalidSolverName(t *testing.T) {
-	fc := &FileConfig{
-		AutoSolver: AutoSolverFileConfig{
-			Solvers: []string{"cloudflare", "madeupsolver"},
-		},
-	}
-
-	errs := ValidateFileConfig(fc)
-	if len(errs) == 0 {
-		t.Fatal("expected autosolver validation error, got none")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "autoSolver.solvers") &&
-			strings.Contains(err.Error(), "invalid solver") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected invalid solver name error, got %v", errs)
-	}
-}
-
-func TestValidateFileConfig_AutoSolverLLMFallbackRejected(t *testing.T) {
-	enabled := true
-	fc := &FileConfig{
-		AutoSolver: AutoSolverFileConfig{
-			LLMFallback: &enabled,
-		},
-	}
-
-	errs := ValidateFileConfig(fc)
-	if len(errs) == 0 {
-		t.Fatal("expected autosolver llmFallback validation error, got none")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "autoSolver.llmFallback") &&
-			strings.Contains(err.Error(), "not implemented") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected llm fallback not implemented error, got %v", errs)
-	}
-}
-
-func TestValidateFileConfig_AutoSolverLLMProviderRejected(t *testing.T) {
-	fc := &FileConfig{
-		AutoSolver: AutoSolverFileConfig{
-			LLMProvider: "openai",
-		},
-	}
-
-	errs := ValidateFileConfig(fc)
-	if len(errs) == 0 {
-		t.Fatal("expected autosolver llmProvider validation error, got none")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "autoSolver.llmProvider") &&
-			strings.Contains(err.Error(), "not implemented") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("expected llm provider not implemented error, got %v", errs)
-	}
-}
-
 // --- IDPI validation tests ---
 
 // TestValidateIDPIConfig_Disabled verifies that a disabled IDPI config produces
@@ -847,6 +750,44 @@ func TestValidateFileConfig_TransferLimits(t *testing.T) {
 	}
 }
 
+func TestValidateFileConfig_AutoSolverValidation(t *testing.T) {
+	maxAttempts := 0
+	solverTimeout := 0
+	retryBase := 2000
+	retryMax := 1000
+
+	fc := &FileConfig{
+		AutoSolver: AutoSolverFileConfig{
+			MaxAttempts:      &maxAttempts,
+			SolverTimeoutSec: &solverTimeout,
+			RetryBaseDelayMs: &retryBase,
+			RetryMaxDelayMs:  &retryMax,
+			Solvers:          []string{"cloudflare", ""},
+		},
+	}
+
+	errs := ValidateFileConfig(fc)
+	if len(errs) == 0 {
+		t.Fatal("expected autosolver validation errors, got none")
+	}
+
+	joined := ""
+	for _, err := range errs {
+		joined += err.Error() + "\n"
+	}
+
+	for _, want := range []string{
+		"autoSolver.maxAttempts",
+		"autoSolver.solverTimeoutSec",
+		"autoSolver.retryBaseDelayMs/retryMaxDelayMs",
+		"autoSolver.solvers",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected error containing %q, got:\n%s", want, joined)
+		}
+	}
+}
+
 // TestValidateIDPIConfig_EmptyCustomPattern verifies that an empty or
 // whitespace-only custom pattern is rejected.
 func TestValidateIDPIConfig_EmptyCustomPattern(t *testing.T) {
@@ -930,4 +871,39 @@ func TestValidateIDPIConfig_ScanTimeoutSec(t *testing.T) {
 			t.Errorf("expected no error for scanTimeoutSec=10, got: %v", errs)
 		}
 	})
+}
+
+func TestValidateFileConfig_TabPolicyBlock(t *testing.T) {
+	negative := -1
+	zero := 0
+	positive := 100
+	tests := []struct {
+		name    string
+		tp      TabPolicyDefaults
+		wantErr bool
+	}{
+		{"all empty", TabPolicyDefaults{}, false},
+		{"valid lifecycle", TabPolicyDefaults{Lifecycle: "close_idle"}, false},
+		{"keep lifecycle", TabPolicyDefaults{Lifecycle: "keep"}, false},
+		{"valid eviction", TabPolicyDefaults{Eviction: "reject"}, false},
+		{"bad lifecycle", TabPolicyDefaults{Lifecycle: "burn"}, true},
+		{"bad eviction", TabPolicyDefaults{Eviction: "drop"}, true},
+		{"negative delay", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &negative}, true},
+		{"zero delay ok", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &zero}, false},
+		{"positive delay ok", TabPolicyDefaults{Lifecycle: "close_idle", CloseDelaySec: &positive}, false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			fc := &FileConfig{
+				InstanceDefaults: InstanceDefaultsConfig{TabPolicy: &tt.tp},
+			}
+			errs := ValidateFileConfig(fc)
+			hasErr := len(errs) > 0
+			if hasErr != tt.wantErr {
+				t.Errorf("got errs=%v, want error=%v", errs, tt.wantErr)
+			}
+		})
+	}
 }

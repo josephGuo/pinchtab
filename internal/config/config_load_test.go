@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -141,6 +140,24 @@ func TestLoadConfigDefaults(t *testing.T) {
 	}
 	if cfg.Sessions.Dashboard.RequireElevation {
 		t.Errorf("default Sessions.Dashboard.RequireElevation = %v, want false", cfg.Sessions.Dashboard.RequireElevation)
+	}
+	if cfg.AutoSolver.AutoTrigger != true {
+		t.Errorf("default AutoSolver.AutoTrigger = %v, want true", cfg.AutoSolver.AutoTrigger)
+	}
+	if cfg.AutoSolver.TriggerOnNavigate != true {
+		t.Errorf("default AutoSolver.TriggerOnNavigate = %v, want true", cfg.AutoSolver.TriggerOnNavigate)
+	}
+	if cfg.AutoSolver.TriggerOnAction != true {
+		t.Errorf("default AutoSolver.TriggerOnAction = %v, want true", cfg.AutoSolver.TriggerOnAction)
+	}
+	if cfg.AutoSolver.SolverTimeoutSec != 30 {
+		t.Errorf("default AutoSolver.SolverTimeoutSec = %d, want 30", cfg.AutoSolver.SolverTimeoutSec)
+	}
+	if cfg.AutoSolver.RetryBaseDelayMs != 500 {
+		t.Errorf("default AutoSolver.RetryBaseDelayMs = %d, want 500", cfg.AutoSolver.RetryBaseDelayMs)
+	}
+	if cfg.AutoSolver.RetryMaxDelayMs != 10000 {
+		t.Errorf("default AutoSolver.RetryMaxDelayMs = %d, want 10000", cfg.AutoSolver.RetryMaxDelayMs)
 	}
 }
 
@@ -288,7 +305,7 @@ func TestLoadConfigActivityStateDirIgnoresConfigOverride(t *testing.T) {
 	_ = os.Setenv("PINCHTAB_CONFIG", configPath)
 	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
 
-	payload := map[string]any{
+	cfgDoc, err := json.Marshal(map[string]any{
 		"server": map[string]any{
 			"stateDir": "/tmp/profile-state",
 		},
@@ -297,12 +314,12 @@ func TestLoadConfigActivityStateDirIgnoresConfigOverride(t *testing.T) {
 				"stateDir": sharedActivityDir,
 			},
 		},
-	}
-	raw, err := json.Marshal(payload)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, raw, 0644); err != nil {
+
+	if err := os.WriteFile(configPath, cfgDoc, 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -668,44 +685,78 @@ func TestApplyFileConfigToRuntime_SanitizesChromeExtraFlags(t *testing.T) {
 	}
 }
 
-func TestApplyFileConfigToRuntime_SanitizesAutoSolverUnsupportedSettings(t *testing.T) {
+func TestApplyFileConfigToRuntime_AutoSolverSettings(t *testing.T) {
+	cfg := &RuntimeConfig{}
+	enabled := true
+	autoTrigger := true
+	triggerOnNavigate := true
+	triggerOnAction := false
+	maxAttempts := 5
+	solverTimeoutSec := 45
+	retryBaseDelayMs := 250
+	retryMaxDelayMs := 2500
 	llmFallback := true
-	cfg := &RuntimeConfig{}
+
 	fc := &FileConfig{
 		AutoSolver: AutoSolverFileConfig{
-			Solvers:     []string{" cloudflare ", "capsolver", "semantic", "twocaptcha", "semantic"},
-			LLMProvider: "openai",
-			LLMFallback: &llmFallback,
+			Enabled:           &enabled,
+			AutoTrigger:       &autoTrigger,
+			TriggerOnNavigate: &triggerOnNavigate,
+			TriggerOnAction:   &triggerOnAction,
+			MaxAttempts:       &maxAttempts,
+			SolverTimeoutSec:  &solverTimeoutSec,
+			RetryBaseDelayMs:  &retryBaseDelayMs,
+			RetryMaxDelayMs:   &retryMaxDelayMs,
+			Solvers:           []string{"jschallenge", "cloudflare"},
+			LLMProvider:       "openai",
+			LLMFallback:       &llmFallback,
+			External: AutoSolverExtConf{
+				CapsolverKey:  "cap-key",
+				TwoCaptchaKey: "two-key",
+			},
 		},
 	}
 
 	ApplyFileConfigToRuntime(cfg, fc)
 
-	if cfg.AutoSolver.LLMProvider != "" {
-		t.Fatalf("AutoSolver.LLMProvider = %q, want empty", cfg.AutoSolver.LLMProvider)
+	if !cfg.AutoSolver.Enabled {
+		t.Fatal("AutoSolver.Enabled = false, want true")
 	}
-	if cfg.AutoSolver.LLMFallback {
-		t.Fatal("AutoSolver.LLMFallback = true, want false")
+	if !cfg.AutoSolver.AutoTrigger {
+		t.Fatal("AutoSolver.AutoTrigger = false, want true")
 	}
-	wantSolvers := []string{"cloudflare", "semantic"}
-	if !reflect.DeepEqual(cfg.AutoSolver.Solvers, wantSolvers) {
-		t.Fatalf("AutoSolver.Solvers = %v, want %v", cfg.AutoSolver.Solvers, wantSolvers)
+	if !cfg.AutoSolver.TriggerOnNavigate {
+		t.Fatal("AutoSolver.TriggerOnNavigate = false, want true")
 	}
-}
-
-func TestApplyFileConfigToRuntime_AutoSolverFallsBackToDefaultSupportedSolvers(t *testing.T) {
-	cfg := &RuntimeConfig{}
-	fc := &FileConfig{
-		AutoSolver: AutoSolverFileConfig{
-			Solvers: []string{"capsolver", "twocaptcha"},
-		},
+	if cfg.AutoSolver.TriggerOnAction {
+		t.Fatal("AutoSolver.TriggerOnAction = true, want false")
 	}
-
-	ApplyFileConfigToRuntime(cfg, fc)
-
-	wantSolvers := []string{"cloudflare", "semantic"}
-	if !reflect.DeepEqual(cfg.AutoSolver.Solvers, wantSolvers) {
-		t.Fatalf("AutoSolver.Solvers = %v, want %v", cfg.AutoSolver.Solvers, wantSolvers)
+	if cfg.AutoSolver.MaxAttempts != 5 {
+		t.Fatalf("AutoSolver.MaxAttempts = %d, want 5", cfg.AutoSolver.MaxAttempts)
+	}
+	if cfg.AutoSolver.SolverTimeoutSec != 45 {
+		t.Fatalf("AutoSolver.SolverTimeoutSec = %d, want 45", cfg.AutoSolver.SolverTimeoutSec)
+	}
+	if cfg.AutoSolver.RetryBaseDelayMs != 250 {
+		t.Fatalf("AutoSolver.RetryBaseDelayMs = %d, want 250", cfg.AutoSolver.RetryBaseDelayMs)
+	}
+	if cfg.AutoSolver.RetryMaxDelayMs != 2500 {
+		t.Fatalf("AutoSolver.RetryMaxDelayMs = %d, want 2500", cfg.AutoSolver.RetryMaxDelayMs)
+	}
+	if len(cfg.AutoSolver.Solvers) != 2 || cfg.AutoSolver.Solvers[0] != "jschallenge" {
+		t.Fatalf("AutoSolver.Solvers = %v, want configured order", cfg.AutoSolver.Solvers)
+	}
+	if cfg.AutoSolver.LLMProvider != "openai" {
+		t.Fatalf("AutoSolver.LLMProvider = %q, want openai", cfg.AutoSolver.LLMProvider)
+	}
+	if !cfg.AutoSolver.LLMFallback {
+		t.Fatal("AutoSolver.LLMFallback = false, want true")
+	}
+	if cfg.AutoSolver.CapsolverKey != "cap-key" {
+		t.Fatalf("AutoSolver.CapsolverKey = %q, want cap-key", cfg.AutoSolver.CapsolverKey)
+	}
+	if cfg.AutoSolver.TwoCaptchaKey != "two-key" {
+		t.Fatalf("AutoSolver.TwoCaptchaKey = %q, want two-key", cfg.AutoSolver.TwoCaptchaKey)
 	}
 }
 
@@ -717,5 +768,105 @@ func clearConfigEnvVars(t *testing.T) {
 	}
 	for _, v := range envVars {
 		_ = os.Unsetenv(v)
+	}
+}
+
+func writeTestConfig(t *testing.T, body string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "config.json")
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Setenv("PINCHTAB_CONFIG", path)
+	t.Cleanup(func() { _ = os.Unsetenv("PINCHTAB_CONFIG") })
+}
+
+func TestLoadConfig_TabLifecycleDefaults(t *testing.T) {
+	clearConfigEnvVars(t)
+	_ = os.Setenv("PINCHTAB_CONFIG", filepath.Join(t.TempDir(), "nonexistent.json"))
+	defer func() { _ = os.Unsetenv("PINCHTAB_CONFIG") }()
+
+	cfg := Load()
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("default TabLifecyclePolicy = %q, want close_idle", cfg.TabLifecyclePolicy)
+	}
+	if cfg.TabCloseDelay != 5*time.Minute {
+		t.Errorf("default TabCloseDelay = %v, want 5m", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_TabPolicyBlockPopulatesFields(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabPolicy": {
+				"eviction": "reject",
+				"lifecycle": "close_idle",
+				"closeDelaySec": 30
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "reject" {
+		t.Errorf("TabEvictionPolicy = %q, want reject", cfg.TabEvictionPolicy)
+	}
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("TabLifecyclePolicy = %q, want close_idle", cfg.TabLifecyclePolicy)
+	}
+	if cfg.TabCloseDelay != 30*time.Second {
+		t.Errorf("TabCloseDelay = %v, want 30s", cfg.TabCloseDelay)
+	}
+}
+
+func TestLoadConfig_LegacyTabEvictionPolicyStillHonored(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabEvictionPolicy": "close_oldest"
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "close_oldest" {
+		t.Errorf("legacy tabEvictionPolicy not honored; got %q", cfg.TabEvictionPolicy)
+	}
+	// Lifecycle defaults preserved (default is close_idle).
+	if cfg.TabLifecyclePolicy != "close_idle" {
+		t.Errorf("legacy-only config should leave lifecycle at default close_idle; got %q", cfg.TabLifecyclePolicy)
+	}
+}
+
+func TestLoadConfig_TabPolicyWinsOverLegacyEviction(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabEvictionPolicy": "close_oldest",
+			"tabPolicy": {
+				"eviction": "reject"
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabEvictionPolicy != "reject" {
+		t.Errorf("tabPolicy.eviction should override legacy field; got %q", cfg.TabEvictionPolicy)
+	}
+}
+
+func TestLoadConfig_TabCloseDelayPreservesDefaultWhenAbsent(t *testing.T) {
+	clearConfigEnvVars(t)
+	writeTestConfig(t, `{
+		"instanceDefaults": {
+			"tabPolicy": {
+				"lifecycle": "close_idle"
+			}
+		}
+	}`)
+
+	cfg := Load()
+	if cfg.TabCloseDelay != 5*time.Minute {
+		t.Errorf("TabCloseDelay = %v, want 5m default", cfg.TabCloseDelay)
 	}
 }
