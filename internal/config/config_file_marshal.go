@@ -32,7 +32,7 @@ func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
 		return nil
 	}
 	hasLifecycle := cfg.TabLifecyclePolicy != "" &&
-		(cfg.TabLifecyclePolicy != "close_idle" || cfg.TabCloseDelay != 5*time.Minute)
+		(cfg.TabLifecyclePolicy != "keep" || cfg.TabCloseDelay != 5*time.Minute)
 	hasRestore := cfg.TabRestore
 	if !hasLifecycle && !hasRestore {
 		return nil
@@ -40,7 +40,7 @@ func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
 	out := &TabPolicyDefaults{}
 	if hasLifecycle {
 		out.Lifecycle = cfg.TabLifecyclePolicy
-		if cfg.TabLifecyclePolicy == "close_idle" && cfg.TabCloseDelay > 0 {
+		if cfg.TabLifecyclePolicy == "close_idle" && cfg.TabCloseDelay > 0 && cfg.TabCloseDelay != 5*time.Minute {
 			sec := int(cfg.TabCloseDelay / time.Second)
 			out.CloseDelaySec = &sec
 		}
@@ -54,6 +54,7 @@ func tabPolicyDefaultsFromRuntime(cfg *RuntimeConfig) *TabPolicyDefaults {
 
 func (fc FileConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fileConfigJSON{
+		Schema:        fc.Schema,
 		ConfigVersion: fc.ConfigVersion,
 		Server: serverConfigJSON{
 			Port:              fc.Server.Port,
@@ -93,6 +94,7 @@ func (fc FileConfig) MarshalJSON() ([]byte, error) {
 			AllowMacro:             fc.Security.AllowMacro,
 			AllowScreencast:        fc.Security.AllowScreencast,
 			AllowDownload:          fc.Security.AllowDownload,
+			AllowNetworkIntercept:  fc.Security.AllowNetworkIntercept,
 			AllowedDomains:         effectiveSecurityAllowedDomains(fc.Security),
 			DownloadAllowedDomains: copyStringSlice(fc.Security.DownloadAllowedDomains),
 			DownloadMaxBytes:       fc.Security.DownloadMaxBytes,
@@ -248,6 +250,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	allowMacro := cfg.AllowMacro
 	allowScreencast := cfg.AllowScreencast
 	allowDownload := cfg.AllowDownload
+	allowNetworkIntercept := cfg.AllowNetworkIntercept
 	downloadAllowedDomains := copyStringSlice(cfg.DownloadAllowedDomains)
 	downloadMaxBytes := cfg.EffectiveDownloadMaxBytes()
 	allowUpload := cfg.AllowUpload
@@ -304,6 +307,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 	}
 
 	fc := FileConfig{
+		Schema: CurrentConfigSchemaURL(),
 		Server: ServerConfig{
 			Port:              cfg.Port,
 			Bind:              cfg.Bind,
@@ -342,6 +346,7 @@ func FileConfigFromRuntime(cfg *RuntimeConfig) FileConfig {
 			AllowMacro:             &allowMacro,
 			AllowScreencast:        &allowScreencast,
 			AllowDownload:          &allowDownload,
+			AllowNetworkIntercept:  &allowNetworkIntercept,
 			AllowedDomains:         append([]string(nil), cfg.AllowedDomains...),
 			DownloadAllowedDomains: downloadAllowedDomains,
 			DownloadMaxBytes:       &downloadMaxBytes,

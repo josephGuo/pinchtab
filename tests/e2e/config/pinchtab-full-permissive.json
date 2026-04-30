@@ -39,6 +39,7 @@
     "allowScreencast": true,
     "allowUpload": true,
     "allowStateExport": true,
+    "allowNetworkIntercept": true,
     "allowedDomains": [
       "localhost",
       "127.0.0.1",

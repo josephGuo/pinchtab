@@ -1,7 +1,7 @@
 # Group 27: Contenteditable editor
 
 ### 27.1 Type into the rich-text editor
-Navigate to `http://fixtures/editor.html`. Type the text `Hello rich text` into the `#editor` div. `contenteditable` elements don't have `.value`, so use `type` (keyboard events), not `fill`.
+Navigate to `http://fixtures/editor.html`. Type the text `Hello rich text` into the editor area. Note that contenteditable elements don't have `.value`, so use keyboard events rather than fill.
 
 **Verify**: Page text contains `EDITOR_CHARS=15` and the mirror shows `Hello rich text`.
 

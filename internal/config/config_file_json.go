@@ -1,6 +1,7 @@
 package config
 
 type fileConfigJSON struct {
+	Schema           string                      `json:"$schema,omitempty"`
 	ConfigVersion    string                      `json:"configVersion,omitempty"`
 	Server           serverConfigJSON            `json:"server"`
 	Browser          browserConfigJSON           `json:"browser"`
@@ -61,6 +62,7 @@ type securityConfigJSON struct {
 	AllowMacro             *bool          `json:"allowMacro"`
 	AllowScreencast        *bool          `json:"allowScreencast"`
 	AllowDownload          *bool          `json:"allowDownload"`
+	AllowNetworkIntercept  *bool          `json:"allowNetworkIntercept"`
 	AllowedDomains         []string       `json:"allowedDomains"`
 	DownloadAllowedDomains []string       `json:"downloadAllowedDomains"`
 	DownloadMaxBytes       *int           `json:"downloadMaxBytes"`

@@ -26,7 +26,7 @@ var navCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		url := urls.Normalize(args[0])
-		runCLI(func(rt cliRuntime) {
+		runCLIEnsuringServer("nav", func(rt cliRuntime) {
 			tabID := browseractions.Navigate(rt.client, rt.base, rt.token, url, cmd)
 			WriteTabStateFile(tabID)
 		})
@@ -74,75 +74,79 @@ var tabsCmd = &cobra.Command{
 				browseractions.TabList(rt.client, rt.base, rt.token, cmd)
 				return
 			}
-			browseractions.TabFocus(rt.client, rt.base, rt.token, args[0], cmd)
+			tabID := browseractions.TabFocus(rt.client, rt.base, rt.token, args[0], cmd)
+			WriteTabStateFile(tabID)
 		})
 	},
 }
 
-var tabNewCmd = &cobra.Command{
-	Use:   "new [url]",
-	Short: "Open a new tab",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
-			body := map[string]any{"action": "new"}
-			if len(args) > 0 {
-				body["url"] = urls.Normalize(args[0])
-			}
-			browseractions.TabNew(rt.client, rt.base, rt.token, body, cmd)
-		})
-	},
+var closeCmd = newTabCloseCmd()
+var tabCloseCmd = newTabCloseCmd()
+var handoffCmd = newTabHandoffCmd()
+var tabHandoffCmd = newTabHandoffCmd()
+var resumeCmd = newTabResumeCmd()
+var tabResumeCmd = newTabResumeCmd()
+var handoffStatusCmd = newTabHandoffStatusCmd()
+var tabHandoffStatusCmd = newTabHandoffStatusCmd()
+
+func newTabCloseCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "close <id>",
+		Short: "Close a tab by ID",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			runCLI(func(rt cliRuntime) {
+				browseractions.TabClose(rt.client, rt.base, rt.token, args[0], cmd)
+				ClearTabStateFileIfCurrent(args[0])
+			})
+		},
+	}
 }
 
-var tabCloseCmd = &cobra.Command{
-	Use:   "close <id>",
-	Short: "Close a tab by ID",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		runCLI(func(rt cliRuntime) {
-			browseractions.TabClose(rt.client, rt.base, rt.token, args[0], cmd)
-		})
-	},
+func newTabHandoffCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "handoff [id]",
+		Short: "Pause tab automation for human handoff",
+		Long:  "Mark a tab as paused_handoff so action routes block until resumed or timeout expires. Defaults to the current tab from the state file.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			reason, _ := cmd.Flags().GetString("reason")
+			timeoutMS, _ := cmd.Flags().GetInt("timeout-ms")
+			tabID := resolveTabArg(args)
+			runCLI(func(rt cliRuntime) {
+				browseractions.TabHandoff(rt.client, rt.base, rt.token, tabID, reason, timeoutMS, cmd)
+			})
+		},
+	}
 }
 
-var tabHandoffCmd = &cobra.Command{
-	Use:   "handoff [id]",
-	Short: "Pause tab automation for human handoff",
-	Long:  "Mark a tab as paused_handoff so action routes block until resumed or timeout expires. Defaults to the current tab (PINCHTAB_TAB or state file).",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		reason, _ := cmd.Flags().GetString("reason")
-		timeoutMS, _ := cmd.Flags().GetInt("timeout-ms")
-		tabID := resolveTabArg(args)
-		runCLI(func(rt cliRuntime) {
-			browseractions.TabHandoff(rt.client, rt.base, rt.token, tabID, reason, timeoutMS, cmd)
-		})
-	},
+func newTabResumeCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "resume [id]",
+		Short: "Resume a paused_handoff tab",
+		Long:  "Resume automation on a paused tab. Defaults to the current tab from the state file.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			status, _ := cmd.Flags().GetString("status")
+			tabID := resolveTabArg(args)
+			runCLI(func(rt cliRuntime) {
+				browseractions.TabResume(rt.client, rt.base, rt.token, tabID, status, cmd)
+			})
+		},
+	}
 }
 
-var tabResumeCmd = &cobra.Command{
-	Use:   "resume [id]",
-	Short: "Resume a paused_handoff tab",
-	Long:  "Resume automation on a paused tab. Defaults to the current tab (PINCHTAB_TAB or state file).",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		status, _ := cmd.Flags().GetString("status")
-		tabID := resolveTabArg(args)
-		runCLI(func(rt cliRuntime) {
-			browseractions.TabResume(rt.client, rt.base, rt.token, tabID, status, cmd)
-		})
-	},
-}
-
-var tabHandoffStatusCmd = &cobra.Command{
-	Use:   "handoff-status [id]",
-	Short: "Show handoff status for a tab",
-	Long:  "Show handoff status. Defaults to the current tab (PINCHTAB_TAB or state file).",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		tabID := resolveTabArg(args)
-		runCLI(func(rt cliRuntime) {
-			browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, tabID, cmd)
-		})
-	},
+func newTabHandoffStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "handoff-status [id]",
+		Short: "Show handoff status for a tab",
+		Long:  "Show handoff status. Defaults to the current tab from the state file.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			tabID := resolveTabArg(args)
+			runCLI(func(rt cliRuntime) {
+				browseractions.TabHandoffStatus(rt.client, rt.base, rt.token, tabID, cmd)
+			})
+		},
+	}
 }

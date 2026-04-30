@@ -29,6 +29,7 @@ type TabManager struct {
 	onAfterClose func() // optional: invoked after any successful CloseTab
 	dialogMgr    *DialogManager
 	logStore     *ConsoleLogStore
+	routeMgr     *RouteManager
 	netMonitor   *NetworkMonitor
 	currentTab   string // ID of the most recently used tab
 	executor     *TabExecutor
@@ -75,6 +76,13 @@ func (tm *TabManager) SetOnAfterClose(fn func()) {
 // SetNetworkMonitor sets the network monitor for eager network capture on new tabs.
 func (tm *TabManager) SetNetworkMonitor(nm *NetworkMonitor) {
 	tm.netMonitor = nm
+}
+
+// SetRouteManager registers the per-bridge RouteManager so the cleanup path
+// can drop a tab's interception state when the tab closes (mirrors the
+// network-monitor / log-store / executor cleanup hooks in tab_cleanup.go).
+func (tm *TabManager) SetRouteManager(rm *RouteManager) {
+	tm.routeMgr = rm
 }
 
 // browserExecutorContext returns a context bound to the top-level browser

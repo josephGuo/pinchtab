@@ -25,6 +25,7 @@ func Load() *RuntimeConfig {
 		AllowMacro:             false,
 		AllowScreencast:        false,
 		AllowDownload:          false,
+		AllowNetworkIntercept:  false,
 		AllowedDomains:         append([]string(nil), defaultLocalAllowedDomains...),
 		DownloadAllowedDomains: nil,
 		DownloadMaxBytes:       DefaultDownloadMaxBytes,
@@ -60,7 +61,7 @@ func Load() *RuntimeConfig {
 		Humanize:           false,
 		StealthLevel:       "light",
 		TabEvictionPolicy:  "close_lru",
-		TabLifecyclePolicy: "close_idle",
+		TabLifecyclePolicy: "keep",
 		TabCloseDelay:      5 * time.Minute,
 		TabRestore:         false,
 
@@ -244,6 +245,9 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 	}
 	if fc.Security.AllowDownload != nil {
 		cfg.AllowDownload = *fc.Security.AllowDownload
+	}
+	if fc.Security.AllowNetworkIntercept != nil {
+		cfg.AllowNetworkIntercept = *fc.Security.AllowNetworkIntercept
 	}
 	cfg.DownloadAllowedDomains = append([]string(nil), fc.Security.DownloadAllowedDomains...)
 	if fc.Security.DownloadMaxBytes != nil {

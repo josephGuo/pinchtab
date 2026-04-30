@@ -1,0 +1,53 @@
+# Subagent Context
+
+You are running PinchTab optimization tasks. You will be given a set of group files, each containing numbered steps to execute using the PinchTab browser automation tool.
+
+## What to read
+
+1. **PinchTab skill**: `skills/pinchtab/SKILL.md` — full command reference and patterns.
+2. **Group files**: `tests/optimization/group-XX.md` — task descriptions and verification markers.
+
+## What NOT to read
+
+- `tests/tools/scripts/baseline.sh` — deterministic baseline; reading it defeats the purpose.
+- `tests/tools/scripts/run-optimization.sh` — infrastructure script, not relevant.
+- `tests/benchmark/` — separate benchmark lane, not your concern.
+
+## Environment
+
+- PinchTab server: `http://localhost:9867`, token: `benchmark-token`
+- Fixtures: `http://fixtures/` (Docker hostname)
+- Available fixture pages: `/`, `/wiki.html`, `/wiki-go.html`, `/wiki-python.html`, `/wiki-rust.html`, `/articles.html`, `/search.html`, `/form.html`, `/dashboard.html`, `/ecommerce.html`, `/spa.html`, `/login.html` — plus additional fixture pages referenced in specific group steps.
+
+## Wrapper
+
+Always use `./scripts/pt ...` — never call `pinchtab` directly.
+
+The wrapper executes pinchtab inside the Docker service and forwards `PINCHTAB_TOKEN` and `PINCHTAB_SERVER` automatically.
+
+Tab state is automatic — `nav` persists the tab ID to a state file, and subsequent commands read it. No need to manage tab IDs manually.
+
+## Recording
+
+Record every step result immediately after completion:
+
+```bash
+./scripts/runner step-end <group> <step> answer "<what you observed>" <pass|fail|skip> "verification notes"
+```
+
+For failures:
+
+```bash
+./scripts/runner step-end <group> <step> fail "<what went wrong>" skip ""
+```
+
+- `<group>` is the group number (e.g., `0`, `15`, `38`)
+- `<step>` is the step number within the group (e.g., `1`, `2`, `3`)
+- Keep answers factual — do not self-grade in the answer payload.
+
+## Execution approach
+
+1. Read the PinchTab skill to learn available commands.
+2. Read the assigned group files.
+3. For each step: navigate to the fixture, interact using PinchTab commands, verify the expected markers appear, and record the result.
+4. Use your judgment to figure out the right commands — the group files describe WHAT to achieve, not HOW.

@@ -103,7 +103,15 @@ export const securityEndpointRows = [
   ["allowScreencast", "Allow screencast"],
   ["allowDownload", "Allow download"],
   ["allowUpload", "Allow upload"],
-] as const satisfies ReadonlyArray<readonly [SecurityEndpointKey, string]>;
+  [
+    "allowNetworkIntercept",
+    "Allow network interception",
+    "Lets agents install rules to abort or fulfill (mock) HTTP requests on a tab. When on, response forgery is FORBIDDEN on hosts in 'Allowed websites' below and PERMITTED elsewhere. Forging responses on hosts you've authorized the agent to use (e.g. your bank) is the highest-risk outcome — that's why allowlisted hosts are protected, not the reverse. OPTIONS preflights are skipped by default to avoid breaking CORS.",
+  ],
+] as const satisfies ReadonlyArray<
+  | readonly [SecurityEndpointKey, string]
+  | readonly [SecurityEndpointKey, string, string]
+>;
 
 export const idpiToggleRows = [
   ["enabled", "Enable IDPI", "Turn on indirect prompt injection defenses."],

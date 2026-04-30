@@ -230,6 +230,10 @@ func (o *Orchestrator) AllowsStateExport() bool {
 	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowStateExport
 }
 
+func (o *Orchestrator) AllowsNetworkIntercept() bool {
+	return o != nil && o.runtimeCfg != nil && o.runtimeCfg.AllowNetworkIntercept
+}
+
 func (o *Orchestrator) SetPortRange(start, end int) {
 	o.portAllocator = NewPortAllocator(start, end)
 }

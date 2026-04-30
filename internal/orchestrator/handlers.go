@@ -24,6 +24,8 @@ func (o *Orchestrator) Allows(cap routes.Capability) bool {
 		return o.AllowsUpload()
 	case routes.CapStateExport:
 		return o.AllowsStateExport()
+	case routes.CapNetworkIntercept:
+		return o.AllowsNetworkIntercept()
 	default:
 		return false
 	}
@@ -107,6 +109,9 @@ func (o *Orchestrator) registerHandlers(mux *http.ServeMux, skipLaunch bool) {
 		case routes.CapStateExport:
 			enabled = o.AllowsStateExport()
 			feature, setting, code = "stateExport", "security.allowStateExport", "state_export_disabled"
+		case routes.CapNetworkIntercept:
+			enabled = o.AllowsNetworkIntercept()
+			feature, setting, code = "networkIntercept", "security.allowNetworkIntercept", "network_intercept_disabled"
 		}
 		for _, ep := range eps {
 			registerCapabilityRoute(mux, ep.TabRoute(), enabled, feature, setting, code, o.proxyTabRequest)

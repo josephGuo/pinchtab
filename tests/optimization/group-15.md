@@ -21,7 +21,7 @@ Navigate to `http://fixtures/article.html` and extract the HTML of the main `art
 **Verify**: Extracted HTML contains `VERIFY_ARTICLE_PAGE_41414`.
 
 ### 15.4 Inspect a stable computed CSS property
-Navigate to `http://fixtures/pricing.html` and inspect the computed CSS for `#plan-pro`. Report the computed `display` value.
+Navigate to `http://fixtures/pricing.html` and inspect the computed CSS for the Pro plan card. Report the computed `display` value.
 
 **Verify**: The computed value is `flex`.
 

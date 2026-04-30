@@ -7,11 +7,16 @@ import (
 )
 
 var snapCmd = &cobra.Command{
-	Use:   "snap",
+	Use:   "snap [selector]",
 	Short: "Snapshot accessibility tree",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		selector := ""
+		if len(args) > 0 && stringFlag(cmd, "selector") == "" {
+			selector = args[0]
+		}
 		runCLI(func(rt cliRuntime) {
-			browseractions.Snapshot(rt.client, rt.base, rt.token, cmd)
+			browseractions.Snapshot(rt.client, rt.base, rt.token, cmd, selector)
 		})
 	},
 }

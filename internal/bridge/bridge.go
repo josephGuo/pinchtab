@@ -30,6 +30,10 @@ type Bridge struct {
 	// Network monitoring
 	netMonitor *NetworkMonitor
 
+	// Network route interception (Fetch domain). Lazy: enables CDP fetch
+	// only when at least one rule is active for a tab.
+	routeMgr *RouteManager
+
 	fingerprintMu        sync.RWMutex
 	fingerprintOverlays  map[string]bool
 	workerStealthTargets sync.Map
@@ -70,6 +74,12 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		LogStore:            logStore,
 		stealthLaunchMode:   stealth.LaunchModeUninitialized,
 	}
+	b.routeMgr = NewRouteManager(func() []string {
+		if b.Config == nil {
+			return nil
+		}
+		return b.Config.AllowedDomains
+	})
 	b.ensureStealthBundle()
 	b.Dialogs = NewDialogManager()
 	if cfg != nil && browserCtx != nil {
@@ -77,6 +87,7 @@ func New(allocCtx, browserCtx context.Context, cfg *config.RuntimeConfig) *Bridg
 		b.SetOnAfterClose(func() { go b.SaveState() })
 		b.SetDialogManager(b.Dialogs)
 		b.SetNetworkMonitor(b.netMonitor)
+		b.SetRouteManager(b.routeMgr)
 		if !b.quietStealthObservers() {
 			b.StartBrowserGuards()
 		}
@@ -245,6 +256,44 @@ func (b *Bridge) Execute(ctx context.Context, tabID string, task func(ctx contex
 // NetworkMonitor returns the bridge's network monitor instance.
 func (b *Bridge) NetworkMonitor() *NetworkMonitor {
 	return b.netMonitor
+}
+
+// AddRouteRule installs (or replaces by Pattern) an interception rule for the
+// given tab. The first call for a tab enables CDP Fetch interception.
+func (b *Bridge) AddRouteRule(tabID string, rule RouteRule) error {
+	if b.routeMgr == nil {
+		return fmt.Errorf("route manager not initialized")
+	}
+	tabCtx, resolvedID, err := b.TabContext(tabID)
+	if err != nil {
+		return err
+	}
+	return b.routeMgr.AddRule(tabCtx, resolvedID, rule)
+}
+
+// RemoveRouteRule removes a rule by Pattern, or all rules when pattern is empty.
+// Returns the count of rules removed.
+func (b *Bridge) RemoveRouteRule(tabID, pattern string) (int, error) {
+	if b.routeMgr == nil {
+		return 0, fmt.Errorf("route manager not initialized")
+	}
+	tabCtx, resolvedID, err := b.TabContext(tabID)
+	if err != nil {
+		return 0, err
+	}
+	return b.routeMgr.Remove(tabCtx, resolvedID, pattern)
+}
+
+// ListRouteRules returns the current interception rules for a tab.
+func (b *Bridge) ListRouteRules(tabID string) ([]RouteRule, error) {
+	if b.routeMgr == nil {
+		return nil, fmt.Errorf("route manager not initialized")
+	}
+	_, resolvedID, err := b.TabContext(tabID)
+	if err != nil {
+		return nil, err
+	}
+	return b.routeMgr.List(resolvedID), nil
 }
 
 // GetDialogManager returns the bridge's dialog manager.

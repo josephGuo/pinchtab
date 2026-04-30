@@ -91,3 +91,86 @@ func TestHandleNetworkClearWithTab(t *testing.T) {
 		t.Errorf("expected /network/clear path, got %s", text)
 	}
 }
+
+func TestHandleNetworkRoute_Abort(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_route", map[string]any{
+		"tabId":   "t1",
+		"pattern": "*.png",
+		"action":  "abort",
+	}, srv)
+
+	text := resultText(t, r)
+	if !strings.Contains(text, "/tabs/t1/network/route") {
+		t.Errorf("expected /tabs/t1/network/route path, got %s", text)
+	}
+	if !strings.Contains(text, `"action":"abort"`) {
+		t.Errorf("expected action=abort in body echo, got %s", text)
+	}
+}
+
+func TestHandleNetworkRoute_Fulfill_PassesAllFields(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_route", map[string]any{
+		"tabId":        "t1",
+		"pattern":      "api",
+		"action":       "fulfill",
+		"body":         `{"k":1}`,
+		"contentType":  "application/json",
+		"status":       float64(201),
+		"resourceType": "xhr",
+	}, srv)
+
+	text := resultText(t, r)
+	for _, want := range []string{`"contentType":"application/json"`, `"resourceType":"xhr"`, `"status":201`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("expected %s in body echo, got %s", want, text)
+		}
+	}
+}
+
+func TestHandleNetworkRoute_MissingPattern(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_route", map[string]any{"tabId": "t1"}, srv)
+	if !r.IsError {
+		t.Error("expected error when pattern missing")
+	}
+}
+
+func TestHandleNetworkUnroute(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_unroute", map[string]any{
+		"tabId":   "t1",
+		"pattern": "*.png",
+	}, srv)
+
+	text := resultText(t, r)
+	if !strings.Contains(text, "/tabs/t1/network/route") {
+		t.Errorf("expected /tabs/t1/network/route path, got %s", text)
+	}
+	if !strings.Contains(text, `"DELETE"`) {
+		t.Errorf("expected DELETE method, got %s", text)
+	}
+	if !strings.Contains(text, "*.png") {
+		t.Errorf("expected pattern in query, got %s", text)
+	}
+}
+
+func TestHandleNetworkUnroute_All(t *testing.T) {
+	srv := mockPinchTab()
+	defer srv.Close()
+
+	r := callTool(t, "pinchtab_network_unroute", map[string]any{"tabId": "t1"}, srv)
+	text := resultText(t, r)
+	if !strings.Contains(text, "/tabs/t1/network/route") {
+		t.Errorf("expected /tabs/t1/network/route path, got %s", text)
+	}
+}

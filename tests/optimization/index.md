@@ -6,7 +6,7 @@ Read this index first, then read the relevant group files.
 
 ## How to use this directory
 
-- `setup-pinchtab.md` and `setup-agent-browser.md` define lane-specific setup, wrapper usage, recording, and Group 0 behavior.
+- `setup-pinchtab.md` defines lane-specific setup, wrapper usage, and recording.
 - This directory defines the shared task groups.
 - Each group lives in its own file: `group-00.md` through `group-38.md`.
 - When running a subset, read only the selected group files.

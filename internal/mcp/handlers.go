@@ -57,9 +57,11 @@ func handlerMap(c *Client) map[string]func(context.Context, mcp.CallToolRequest)
 		"pinchtab_wait_for_function": handleWaitForFunction(c),
 
 		// Network monitoring
-		"pinchtab_network":        handleNetwork(c),
-		"pinchtab_network_detail": handleNetworkDetail(c),
-		"pinchtab_network_clear":  handleNetworkClear(c),
+		"pinchtab_network":         handleNetwork(c),
+		"pinchtab_network_detail":  handleNetworkDetail(c),
+		"pinchtab_network_clear":   handleNetworkClear(c),
+		"pinchtab_network_route":   handleNetworkRoute(c),
+		"pinchtab_network_unroute": handleNetworkUnroute(c),
 
 		// Dialog
 		"pinchtab_dialog": handleDialog(c),

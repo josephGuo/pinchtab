@@ -216,6 +216,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatBoolPtr(s.AllowScreencast), nil
 	case "allowDownload":
 		return formatBoolPtr(s.AllowDownload), nil
+	case "allowNetworkIntercept":
+		return formatBoolPtr(s.AllowNetworkIntercept), nil
 	case "allowedDomains":
 		return strings.Join(s.AllowedDomains, ","), nil
 	case "downloadAllowedDomains":

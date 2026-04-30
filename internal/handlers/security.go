@@ -25,6 +25,10 @@ func (h *Handlers) uploadEnabled() bool {
 	return h != nil && h.Config != nil && h.Config.AllowUpload
 }
 
+func (h *Handlers) networkInterceptEnabled() bool {
+	return h != nil && h.Config != nil && h.Config.AllowNetworkIntercept
+}
+
 func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 	return map[string]endpointSecurityState{
 		"evaluate": {
@@ -72,6 +76,15 @@ func (h *Handlers) endpointSecurityStates() map[string]endpointSecurityState {
 				"GET /tabs/{id}/storage", "POST /tabs/{id}/storage", "DELETE /tabs/{id}/storage",
 				"GET /state/list", "GET /state/show", "POST /state/save",
 				"POST /state/load", "DELETE /state", "POST /state/clean",
+			},
+		},
+		"networkIntercept": {
+			Enabled: h.networkInterceptEnabled(),
+			Setting: "security.allowNetworkIntercept",
+			Message: httpx.DisabledEndpointMessage("networkIntercept", "security.allowNetworkIntercept"),
+			Paths: []string{
+				"GET /network/route", "POST /network/route", "DELETE /network/route",
+				"GET /tabs/{id}/network/route", "POST /tabs/{id}/network/route", "DELETE /tabs/{id}/network/route",
 			},
 		},
 	}

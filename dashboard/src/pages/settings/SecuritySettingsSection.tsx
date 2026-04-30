@@ -38,27 +38,32 @@ export function SecuritySettingsSection({
           ? "One or more sensitive endpoint families are enabled. Features like script execution, downloads, uploads, and live capture can expose high-risk capabilities. Only enable them in trusted environments. You are responsible for securing network access, authentication, and downstream use."
           : "These endpoint families can expose high-risk capabilities when enabled. Only turn them on in trusted environments, and only when you accept responsibility for network access, authentication, and downstream use."}
       </div>
-      {securityEndpointRows.map(([key, label]) => (
-        <SettingRow
-          key={key}
-          label={label}
-          description="Controls whether the corresponding endpoint family is enabled."
-        >
-          <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
-            <input
-              type="checkbox"
-              checked={backendConfig.security[key]}
-              onChange={(e) =>
-                updateBackendSection("security", {
-                  [key]: e.target.checked,
-                } as Partial<Pick<BackendSecurityConfig, SecurityEndpointKey>>)
-              }
-              className="h-4 w-4"
-            />
-            Enable
-          </label>
-        </SettingRow>
-      ))}
+      {securityEndpointRows.map((row) => {
+        const [key, label] = row;
+        const description: string =
+          row.length > 2 && typeof row[2] === "string"
+            ? row[2]
+            : "Controls whether the corresponding endpoint family is enabled.";
+        return (
+          <SettingRow key={key} label={label} description={description}>
+            <label className="flex items-center justify-end gap-3 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={backendConfig.security[key]}
+                onChange={(e) =>
+                  updateBackendSection("security", {
+                    [key]: e.target.checked,
+                  } as Partial<
+                    Pick<BackendSecurityConfig, SecurityEndpointKey>
+                  >)
+                }
+                className="h-4 w-4"
+              />
+              Enable
+            </label>
+          </SettingRow>
+        );
+      })}
       <SettingRow
         label="Allowed websites"
         description="Comma-separated domain allowlist for web content. Use exact hosts or patterns like *.example.com."

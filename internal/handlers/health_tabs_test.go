@@ -470,6 +470,12 @@ func (m *MockBridge) NetworkMonitor() *bridge.NetworkMonitor {
 	return nil
 }
 
+func (m *MockBridge) AddRouteRule(tabID string, rule bridge.RouteRule) error { return nil }
+
+func (m *MockBridge) RemoveRouteRule(tabID, pattern string) (int, error) { return 0, nil }
+
+func (m *MockBridge) ListRouteRules(tabID string) ([]bridge.RouteRule, error) { return nil, nil }
+
 func (m *MockBridge) GetDialogManager() *bridge.DialogManager {
 	return bridge.NewDialogManager()
 }

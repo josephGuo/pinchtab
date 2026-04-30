@@ -380,6 +380,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowDownload = &b
 	case "allowUpload":
 		s.AllowUpload = &b
+	case "allowNetworkIntercept":
+		s.AllowNetworkIntercept = &b
 	case "enableActionGuards":
 		s.EnableActionGuards = &b
 	default:

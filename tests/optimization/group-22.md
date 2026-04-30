@@ -1,7 +1,7 @@
 # Group 22: Mouse Drag & Drop
 
 ### 22.1 Drag a piece into Zone A
-Navigate to `http://fixtures/drag.html`. The page contains a draggable square (`#piece`) and three target zones (`#zone-a`, `#zone-b`, `#zone-c`). Drag the piece so its center ends up over **Zone A**.
+Navigate to `http://fixtures/drag.html`. The page contains a draggable square and three labeled target zones. Drag the piece so it ends up over **Zone A**.
 
 **Verify**: The page shows `LAST_DROP=DROP_ZONE_A_OK`.
 

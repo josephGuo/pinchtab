@@ -9,8 +9,8 @@ We currently support the following versions of Pinchtab with security updates:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| v0.8.4  | :white_check_mark: |
-| < v0.8.3  | :x: |
+| v0.10.0+ | :white_check_mark: |
+| < v0.10.0 | :x: |
 
 ## Current Posture
 
@@ -37,7 +37,7 @@ We take the security of our browser automation bridge seriously. If you believe 
 Instead, please report vulnerabilities privately by:
 
 1.  Opening a **Private Vulnerability Report** on GitHub (if available for this repo).
-2.  Or emailing the maintainer directly at [INSERT EMAIL ADDRESS].
+2.  Or emailing the project team directly at [admin@pinchtab.com](mailto:admin@pinchtab.com).
 
 Please include:
 - A description of the vulnerability.

@@ -1,7 +1,7 @@
 # Group 30: Custom dropdown menu
 
 ### 30.1 Pick the "Beta" item
-Navigate to `http://fixtures/dropdown.html`. The page has a custom dropdown — click the toggle button (`#dropdown-toggle`) to open the menu, then click the "Beta" item.
+Navigate to `http://fixtures/dropdown.html`. The page has a custom dropdown — click the toggle button to open the menu, then click the "Beta" item.
 
 **Verify**: Page text contains `DROPDOWN_SELECTED=BETA`.
 

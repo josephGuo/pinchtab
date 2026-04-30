@@ -30,6 +30,7 @@ func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 		"security.allowScreencast = false",
 		"security.allowDownload = false",
 		"security.allowUpload = false",
+		"security.allowNetworkIntercept = false",
 		"security.attach.enabled = false",
 		"security.attach.allowHosts = 127.0.0.1,localhost,::1",
 		"security.attach.allowSchemes = ws,wss",
@@ -55,6 +56,7 @@ func RecommendedSecurityDefaultLines(cfg *config.RuntimeConfig) []string {
 				"security.allowScreencast = false",
 				"security.allowDownload = false",
 				"security.allowUpload = false",
+				"security.allowNetworkIntercept = false",
 			} {
 				needed[line] = true
 			}

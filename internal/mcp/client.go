@@ -77,6 +77,19 @@ func (c *Client) Get(ctx context.Context, path string, query url.Values) ([]byte
 	return c.do(req)
 }
 
+// Delete performs a DELETE request, optionally with a query string.
+func (c *Client) Delete(ctx context.Context, path string, query url.Values) ([]byte, int, error) {
+	u := c.url(path)
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return c.do(req)
+}
+
 // Post performs a POST request with a JSON body.
 func (c *Client) Post(ctx context.Context, path string, payload any) ([]byte, int, error) {
 	var body io.Reader
