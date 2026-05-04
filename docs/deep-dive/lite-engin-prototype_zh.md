@@ -1,4 +1,4 @@
-# Lite Engine：使用 Gost-DOM 的无 Chrome DOM 捕获
+﻿# Lite Engine：使用 Gost-DOM 的无 Chrome DOM 捕获
 
 **分支：** `feat/lite-engine-gostdom`
 **问题：** [#201](https://github.com/pinchtab/pinchtab/issues/201)

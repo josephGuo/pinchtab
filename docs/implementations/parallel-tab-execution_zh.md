@@ -1,4 +1,4 @@
-# 并行标签页执行
+﻿# 并行标签页执行
 
 PinchTab 支持跨浏览器标签页的安全并行执行。多个标签页可以同时执行操作，而每个标签页内部保持顺序执行，防止资源耗尽和竞态条件。
 
@@ -119,19 +119,19 @@ return te.safeRun(ctx, tabID, task) // 执行并进行 panic 恢复
 
 ### 来自 Vercel Agent Browser 的灵感
 
-[Vercel Agent Browser](https://github.com/vercel-labs/agent-browser) 是一个为 AI 代理设计的无头浏览器自动化 CLI。它使用客户端-守护进程架构，其中 Rust CLI 与管理 Playwright 浏览器实例的持久 Node.js 守护进程（或实验性原生 Rust 守护进程）通信。Agent Browser 的几种架构模式直接影响了 PinchTab 的并行标签页执行设计。
+[Vercel Agent Browser](https://github.com/vercel-labs/agent-browser) 是一个为 AI 代理设计的无头浏览器自动化 命令行界面。它使用客户端-守护进程架构，其中 Rust 命令行界面 与管理 Playwright 浏览器实例的持久 Node.js 守护进程（或实验性原生 Rust 守护进程）通信。Agent Browser 的几种架构模式直接影响了 PinchTab 的并行标签页执行设计。
 
 #### 我们研究的内容
 
-**浏览器会话管理** — Agent Browser 通过 `--session` 标志隔离并发工作负载。每个会话（`--session agent1`、`--session agent2`）生成一个完全独立的浏览器实例，具有独立的 cookie、存储、导航历史和认证状态。会话通过作为单独的 OS 进程并行运行。守护进程在会话内的命令之间保持持久，因此后续的 CLI 调用（`open`、`click`、`fill`）速度很快。
+**浏览器会话管理** — Agent Browser 通过 `--session` 标志隔离并发工作负载。每个会话（`--session agent1`、`--session agent2`）生成一个完全独立的浏览器实例，具有独立的 cookie、存储、导航历史和认证状态。会话通过作为单独的 OS 进程并行运行。守护进程在会话内的命令之间保持持久，因此后续的 命令行界面 调用（`open`、`click`、`fill`）速度很快。
 
-**任务执行模型** — Agent Browser 遵循严格的每次调用一个命令的模型。每个 CLI 调用是通过 IPC 发送到会话守护进程的离散任务。守护进程序列化会话内的命令：每个会话一次只执行一个命令。这是一个设计选择 — Playwright 上下文不是线程安全的，因此序列化可以防止竞态条件。CLI 客户端会阻塞，直到守护进程响应，强制执行严格的请求-响应循环，IPC 读取超时为 30 秒（默认 Playwright 超时设置为 25 秒，以确保正确的错误消息而不是通用超时）。
+**任务执行模型** — Agent Browser 遵循严格的每次调用一个命令的模型。每个 命令行界面 调用是通过 IPC 发送到会话守护进程的离散任务。守护进程序列化会话内的命令：每个会话一次只执行一个命令。这是一个设计选择 — Playwright 上下文不是线程安全的，因此序列化可以防止竞态条件。命令行界面 客户端会阻塞，直到守护进程响应，强制执行严格的请求-响应循环，IPC 读取超时为 30 秒（默认 Playwright 超时设置为 25 秒，以确保正确的错误消息而不是通用超时）。
 
 **并发结构** — 多个会话可以同时运行，但每个单独的会话是单线程的（一次一个命令）。这提供了会话级并发：N 个会话 = N 个并发浏览器实例，每个实例一次处理一个命令。资源通过 OS 隐式管理 — 每个会话是一个具有自己内存空间的单独进程。
 
 **快照和引用工作流** — Agent Browser 生成带有稳定 `ref` 标识符（`@e1`、`@e2`）的可访问性树快照，这些标识符会一直保持到下一个快照。AI 代理使用这些引用来进行确定性元素选择。这影响了 PinchTab 的 `RefCache` 设计，其中每个标签页维护自己的带有节点引用的快照缓存。
 
-**错误处理** — Agent Browser 通过 CLI 退出代码按命令返回错误。失败的命令不会崩溃守护进程 — 会话对后续命令保持活动状态。命令支持 `--json` 输出，用于机器可读的错误报告。
+**错误处理** — Agent Browser 通过 命令行界面 退出代码按命令返回错误。失败的命令不会崩溃守护进程 — 会话对后续命令保持活动状态。命令支持 `--json` 输出，用于机器可读的错误报告。
 
 #### PinchTab 如何不同地适应这些想法
 
@@ -143,7 +143,7 @@ PinchTab 在根本不同的架构级别运行：
 
 **显式资源限制** — Agent Browser 通过 Playwright 的浏览器生命周期隐式管理资源。PinchTab 提供显式的、可配置的控制：`config.json` 中的 `instanceDefaults.maxParallelTabs` 设置信号量容量，`DefaultMaxParallel()` 基于 `min(runtime.NumCPU()*2, 8)` 自动缩放。这对于受限设备（4 核的树莓派 → maxParallel=8）至关重要，并防止大型服务器（32 核 → 仍限制为 8）上的资源使用失控。
 
-**HTTP API 与 CLI** — Agent Browser 通过管道到守护进程的 CLI 命令公开浏览器自动化。PinchTab 公开 REST API（`/navigate`、`/find`、`/action`、`/snapshot`），这自然是并发的 — 多个 HTTP 请求可以同时到达。TabExecutor 专门设计用于安全处理这种并发，这在 Agent Browser 的单线程守护进程模型中是不必要的。
+**HTTP API 与 命令行界面** — Agent Browser 通过管道到守护进程的 命令行界面 命令公开浏览器自动化。PinchTab 公开 REST API（`/navigate`、`/find`、`/action`、`/snapshot`），这自然是并发的 — 多个 HTTP 请求可以同时到达。TabExecutor 专门设计用于安全处理这种并发，这在 Agent Browser 的单线程守护进程模型中是不必要的。
 
 | 概念 | Agent Browser | PinchTab |
 |------|--------------|----------|
@@ -151,8 +151,8 @@ PinchTab 在根本不同的架构级别运行：
 | 并发模型 | 会话级（1 命令/会话） | 标签页级（N 个标签页并发，有界） |
 | 序列化 | 守护进程序列化每个会话 | 每个标签页 `sync.Mutex` + 全局信号量 |
 | 全局限制 | 隐式（每个进程的 OS 资源） | 显式 `chan struct{}`（可配置） |
-| 任务接口 | CLI 命令 → IPC → 守护进程 | HTTP 请求 → `TabExecutor.Execute()` |
-| 错误边界 | 每个命令的 CLI 退出代码 | 每个任务的 `defer recover()` → 错误返回 |
+| 任务接口 | 命令行界面 命令 → IPC → 守护进程 | HTTP 请求 → `TabExecutor.Execute()` |
+| 错误边界 | 每个命令的 命令行界面 退出代码 | 每个任务的 `defer recover()` → 错误返回 |
 | 浏览器引擎 | Playwright（Chromium/Firefox/WebKit） | chromedp（仅通过 CDP 的 Chromium） |
 | 资源效率 | 每个会话一个浏览器 | 所有标签页一个浏览器 |
 

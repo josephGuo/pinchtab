@@ -1,4 +1,4 @@
-# Chrome 用户数据目录和配置文件
+﻿# Chrome 用户数据目录和配置文件
 
 PinchTab 使用专用的**用户数据目录**（配置文件）来管理 Chrome 实例。本文档解释了这些目录如何解析、如何管理锁，以及如何处理并行浏览器实例。
 
@@ -7,7 +7,7 @@ PinchTab 使用专用的**用户数据目录**（配置文件）来管理 Chrome
 PinchTab 使用以下优先级确定 Chrome 的 `--user-data-dir`（配置文件）：
 
 1. **显式 `ProfileDir`**：如果在配置或作为标志提供了特定路径，PinchTab 使用该确切目录。
-2. **命名配置文件**：如果提供了配置文件名称（例如，通过仪表板或 CLI），PinchTab 将其解析为 `ProfilesBaseDir` 内的子目录。
+2. **命名配置文件**：如果提供了配置文件名称（例如，通过仪表板或 命令行界面），PinchTab 将其解析为 `ProfilesBaseDir` 内的子目录。
 3. **默认配置文件**：如果未指定配置文件，默认为 `~/.pinchtab/profiles/default`（在 Linux/macOS 上）。
 
 ## 单例模型

@@ -1,4 +1,4 @@
-# 贡献指南
+﻿# 贡献指南
 
 这是 PinchTab 的权威贡献者和开发指南。
 
@@ -226,7 +226,7 @@ tail -f pinchtab.log  # 查看日志
 curl http://localhost:9867/health
 ```
 
-### 尝试 CLI
+### 尝试 命令行界面
 
 ```bash
 ./pinchtab quick https://pinchtab.com
@@ -247,12 +247,12 @@ go test ./... -v -coverprofile=coverage.out
 go tool cover -html=coverage.out           # 查看覆盖率
 ./dev e2e                                 # 运行默认的 E2E 发布套件
 ./dev e2e docker                          # 构建本地镜像并运行 Docker 冒烟测试
-./dev e2e pr                              # 运行 API + CLI + 基础架构基本测试
+./dev e2e pr                              # 运行 API + 命令行界面 + 基础架构基本测试
 ./dev e2e api                             # 运行 API 基本测试
-./dev e2e cli                             # 运行 CLI 基本测试
+./dev e2e 命令行界面                             # 运行 命令行界面 基本测试
 ./dev e2e infra                           # 运行基础架构基本测试
 ./dev e2e api-extended                    # 运行 API 扩展测试（多实例）
-./dev e2e cli-extended                    # 运行 CLI 扩展测试
+./dev e2e 命令行界面-extended                    # 运行 命令行界面 扩展测试
 ./dev e2e infra-extended                  # 运行基础架构扩展测试（多实例）
 ```
 
@@ -284,12 +284,12 @@ go tool cover -html=coverage.out           # 查看覆盖率
 | `test dashboard` | 仅仪表板测试 |
 | `e2e` | 运行默认的 E2E 发布套件（所有扩展测试） |
 | `e2e docker` | 构建本地镜像并运行 Docker 冒烟测试 |
-| `e2e pr` | 运行 PR E2E 套件（`api` + `cli` + `infra` 基本测试） |
+| `e2e pr` | 运行 PR E2E 套件（`api` + `命令行界面` + `infra` 基本测试） |
 | `e2e api` | 运行 API 基本测试 |
-| `e2e cli` | 运行 CLI 基本测试 |
+| `e2e 命令行界面` | 运行 命令行界面 基本测试 |
 | `e2e infra` | 运行基础架构基本测试 |
 | `e2e api-extended` | 运行 API 扩展测试（多实例） |
-| `e2e cli-extended` | 运行 CLI 扩展测试 |
+| `e2e 命令行界面-extended` | 运行 命令行界面 扩展测试 |
 | `e2e infra-extended` | 运行基础架构扩展测试（多实例） |
 | `e2e release` | 运行发布 E2E 元套件（所有扩展测试） |
 | `build` | 构建应用程序 |
@@ -387,7 +387,7 @@ git push origin feat/my-feature
 
 ---
 
-## 作为 CLI 安装
+## 作为 命令行界面 安装
 
 ### 从源代码
 

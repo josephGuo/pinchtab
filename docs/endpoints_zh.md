@@ -1,4 +1,4 @@
-# 端点参考
+﻿# 端点参考
 
 本页总结了 PinchTab 暴露的实时 HTTP 表面。一些路由仅在桥接模式下可用，一些仅在完整服务器模式下可用，一些由安全设置控制。
 
@@ -107,7 +107,7 @@ POST /tabs/{id}/resume
 - `GET /tabs/{id}/handoff` 返回当前切换状态，或当未设置切换时返回 `active`（当配置超时时间时包括 `expiresAt` 和 `timeoutMs`）
 - `POST /tabs/{id}/resume` 清除切换状态，并可以为调用者携带恢复元数据
 - 动作执行路由（`/action`、`/actions`、`/macro`）拒绝暂停的标签页，返回 `409 tab_paused_handoff`
-- 可用的 CLI 包装器：`pinchtab tab handoff`、`pinchtab tab handoff-status` 和 `pinchtab tab resume`
+- 可用的 命令行界面 包装器：`pinchtab tab handoff`、`pinchtab tab handoff-status` 和 `pinchtab tab resume`
 
 ## 标签页锁定
 

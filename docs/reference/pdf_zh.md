@@ -1,4 +1,4 @@
-# PDF
+﻿# PDF
 
 将当前页面渲染为 PDF。
 
@@ -6,14 +6,14 @@
 curl "http://localhost:9867/pdf?output=file"
 # 响应: {"path":"/path/to/state/pdfs/page-20260308-120001.pdf","size":48210}
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab pdf -o page.pdf
 # 输出: Saved page.pdf (48210 bytes)
 
 pinchtab pdf                        # 自动生成文件名: page-20260308-120001.pdf
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

@@ -1,4 +1,4 @@
-# 展示
+﻿# 展示
 
 ## 为您的代理提供浏览器
 
@@ -16,7 +16,7 @@ pinchtab daemon install
 curl -s -X POST http://127.0.0.1:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 # 响应
 {
@@ -36,7 +36,7 @@ pinchtab instance start
 curl -s -X POST http://127.0.0.1:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/pinchtab/pinchtab"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab nav https://github.com/pinchtab/pinchtab
 # 响应
 {
@@ -50,7 +50,7 @@ pinchtab nav https://github.com/pinchtab/pinchtab
 
 ```bash
 curl -s "http://127.0.0.1:9867/snapshot?filter=interactive" | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab snap -i -c
 # 响应
 {
@@ -66,7 +66,7 @@ pinchtab snap -i -c
 
 ```bash
 curl -s http://127.0.0.1:9867/text | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab text
 # 响应
 {
@@ -82,7 +82,7 @@ pinchtab text
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e14"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab click e14
 # 响应
 {
@@ -98,7 +98,7 @@ pinchtab click e14
 ```bash
 curl -s http://127.0.0.1:9867/screenshot > smoke.jpg
 ls -lh smoke.jpg
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab ss -o smoke.jpg
 # 响应
 Saved smoke.jpg (55876 bytes)
@@ -109,7 +109,7 @@ Saved smoke.jpg (55876 bytes)
 ```bash
 curl -s http://127.0.0.1:9867/pdf > smoke.pdf
 ls -lh smoke.pdf
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab pdf -o smoke.pdf
 # 响应
 Saved smoke.pdf (1494657 bytes)
@@ -125,7 +125,7 @@ Saved smoke.pdf (1494657 bytes)
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"fill","ref":"e3","text":"user@example.com"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab fill e3 "user@example.com"
 # 响应
 {
@@ -142,7 +142,7 @@ pinchtab fill e3 "user@example.com"
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"press","key":"Enter"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab press Enter
 # 响应
 {
@@ -158,7 +158,7 @@ pinchtab press Enter
 ```bash
 curl -s http://127.0.0.1:9867/pdf > report.pdf
 ls -lh report.pdf
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab pdf -o report.pdf
 # 响应
 Saved report.pdf (1494657 bytes)
@@ -167,7 +167,7 @@ Saved report.pdf (1494657 bytes)
 ```bash
 curl -s http://127.0.0.1:9867/screenshot > page.jpg
 ls -lh page.jpg
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab ss -o page.jpg
 # 响应
 Saved page.jpg (55876 bytes)
@@ -225,7 +225,7 @@ curl -s -X POST http://127.0.0.1:9867/instances/attach \
 
 ```bash
 curl -s http://127.0.0.1:9867/instances | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instances
 ```
 

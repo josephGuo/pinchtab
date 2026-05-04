@@ -1,4 +1,4 @@
-# 快照
+﻿# 快照
 
 获取当前页面的可访问性快照，包括可被操作命令重用的元素引用。
 
@@ -8,7 +8,7 @@
 
 ```bash
 curl "http://localhost:9867/snapshot?filter=interactive"
-# CLI 替代方案（默认为紧凑文本输出）
+# 命令行界面 替代方案（默认为紧凑文本输出）
 pinchtab snap -i
 # 输出
 [e5] link "More information..."
@@ -17,7 +17,7 @@ pinchtab snap -i
 pinchtab snap --full
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

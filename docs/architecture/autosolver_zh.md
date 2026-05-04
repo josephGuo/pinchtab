@@ -1,4 +1,4 @@
-# AutoSolver 架构
+﻿# AutoSolver 架构
 
 ## 概述
 

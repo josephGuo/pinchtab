@@ -1,4 +1,4 @@
-# 评估
+﻿# 评估
 
 在当前标签页中运行 JavaScript。除非在配置中明确启用评估，否则此端点会被禁用。
 
@@ -8,13 +8,13 @@
 curl -X POST http://localhost:9867/evaluate \
   -H "Content-Type: application/json" \
   -d '{"expression":"document.title"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab eval "document.title"
 # 响应（默认为结果值；使用 --json 获取完整 JSON）
 Example Domain
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

@@ -1,4 +1,4 @@
-# 系统图表
+﻿# 系统图表
 
 本页收集了当前 PinchTab 架构的主要高级图表。
 
@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TD
-    U["Agent / CLI / Tool"] --> S["PinchTab Server"]
+    U["Agent / 命令行界面 / Tool"] --> S["PinchTab Server"]
 
     S --> D["Dashboard + Config + Profiles API"]
     S --> O["Orchestrator + Strategy Layer"]
@@ -39,7 +39,7 @@ flowchart TD
 flowchart LR
     I["Install PinchTab"] --> R["Run: pinchtab server"]
     R --> L["Local server on localhost:9867"]
-    L --> A["Agent / CLI sends HTTP requests"]
+    L --> A["Agent / 命令行界面 sends HTTP requests"]
     A --> W["Browser work happens through PinchTab"]
 ```
 

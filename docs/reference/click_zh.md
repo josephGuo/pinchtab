@@ -1,4 +1,4 @@
-# 点击
+﻿# 点击
 
 使用快照引用、CSS 选择器、XPath 选择器、文本选择器或语义选择器点击元素。
 
@@ -6,13 +6,13 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e5"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab click e5
 # 响应（使用 --json 获取完整 JSON）
 OK
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

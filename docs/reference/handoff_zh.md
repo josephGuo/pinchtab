@@ -1,8 +1,8 @@
-# 切换
+﻿# 切换
 
 标记标签页以进行人工干预，检查切换状态，然后在手动步骤完成后恢复自动化。
 
-可用的 CLI 包装器：
+可用的 命令行界面 包装器：
 
 ```bash
 pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
@@ -38,4 +38,4 @@ curl -X POST http://localhost:9867/tabs/<tabId>/resume \
 ## 相关页面
 
 - [标签页](./tabs.md)
-- [CLI 概览](./cli.md)
+- [命令行界面 概览](./命令行界面.md)

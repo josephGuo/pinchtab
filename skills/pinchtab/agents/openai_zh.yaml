@@ -1,0 +1,4 @@
+interface:
+  display_name: "PinchTab"
+  short_description: "使用 PinchTab 控制浏览器并访问网站"
+  default_prompt: "使用 $pinchtab 导航到网站、检查新鲜的引用，并高效地完成浏览器任务。"

@@ -1,4 +1,4 @@
-# 框架
+﻿# 框架
 
 获取或设置基于选择器的快照和操作的当前框架范围。
 
@@ -17,7 +17,7 @@ curl -X POST http://localhost:9867/frame \
   -H "Content-Type: application/json" \
   -d '{"target":"main"}'
 
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab frame                          # 显示：main（如果有范围则显示 frameId）
 pinchtab frame "#payment-frame"         # 显示：<frameId> (<name>)
 pinchtab frame main                     # 显示：main

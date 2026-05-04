@@ -1,4 +1,4 @@
-# 截图
+﻿# 截图
 
 将当前页面捕获为图像。默认为 **JPEG** 格式。
 
@@ -42,7 +42,7 @@ curl "http://localhost:9867/screenshot?output=file"
 - `output`: `file` 保存到状态目录。
 - `tabId`: 目标特定标签页。
 
-### CLI
+### 命令行界面
 
 - `-o <path>`: 保存到特定路径。
 - `-q <0-100>`: 设置 JPEG 质量。

@@ -1,4 +1,4 @@
-# 缓存
+﻿# 缓存
 
 清除浏览器的HTTP磁盘缓存。
 
@@ -11,7 +11,7 @@ curl -X POST http://localhost:9867/cache/clear
   "status": "cleared"
 }
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab cache clear
 # 输出: OK
 
@@ -27,7 +27,7 @@ curl http://localhost:9867/cache/status
   "canClear": true
 }
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab cache status
 # 输出: can-clear (或 cache-empty)
 

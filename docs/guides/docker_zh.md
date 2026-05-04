@@ -1,4 +1,4 @@
-# Docker 部署
+﻿# Docker 部署
 
 PinchTab 可以在 Docker 中运行，使用挂载的数据卷来存储配置、配置文件和状态。
 捆绑的镜像现在在 `/data/.config/pinchtab/config.json` 下管理其默认配置。

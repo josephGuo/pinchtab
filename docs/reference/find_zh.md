@@ -1,4 +1,4 @@
-# 查找
+﻿# 查找
 
 `/find` 允许 PinchTab 通过自然语言描述而不是 CSS 选择器或 XPath 来定位元素。
 
@@ -33,11 +33,11 @@ PinchTab 公开两种形式：
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"login button","threshold":0.3,"topK":3}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab find --tab <tabId> "login button"
 ```
 
-有一个专用的 CLI `find` 命令：
+有一个专用的 命令行界面 `find` 命令：
 
 ```bash
 pinchtab find "login button"

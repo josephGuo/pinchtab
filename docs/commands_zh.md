@@ -1,4 +1,4 @@
-# 命令参考
+﻿# 命令参考
 
 ## 服务器和运行时
 
@@ -167,7 +167,7 @@ pinchtab cache clear                    # 清除浏览器 HTTP 磁盘缓存
 pinchtab cache status                   # 检查是否可以清除缓存
 ```
 
-手动切换和恢复可通过 CLI 和 API 获得：
+手动切换和恢复可通过 命令行界面 和 API 获得：
 
 ```bash
 pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000

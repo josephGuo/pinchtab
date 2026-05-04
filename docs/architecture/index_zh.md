@@ -1,4 +1,4 @@
-# 架构
+﻿# 架构
 
 PinchTab 是一个用于 Chrome 的本地 HTTP 控制平面，旨在实现代理驱动的浏览器自动化。调用者通过 HTTP 和 JSON 与 PinchTab 通信；PinchTab 通过 Chrome DevTools 协议将这些请求转换为浏览器操作。
 
@@ -26,7 +26,7 @@ PinchTab 还支持高级附加路径：
 
 ```mermaid
 flowchart TD
-    A["Agent / CLI / HTTP Client"] --> S["PinchTab Server"]
+    A["Agent / 命令行界面 / HTTP Client"] --> S["PinchTab Server"]
 
     S --> D["Dashboard + Config + Profiles API"]
     S --> O["Orchestrator + Strategy Layer"]
@@ -114,7 +114,7 @@ request -> middleware/policy -> routing -> execution -> response
 
 当前架构中最重要的包是：
 
-- `cmd/pinchtab`：进程启动模式和 CLI 入口点
+- `cmd/pinchtab`：进程启动模式和 命令行界面 入口点
 - `internal/orchestrator`：实例生命周期、附加和标签页到实例的代理
 - `internal/bridge`：浏览器运行时、标签页状态和 CDP 执行
 - `internal/handlers`：单实例 HTTP 处理程序

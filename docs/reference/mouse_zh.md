@@ -1,8 +1,8 @@
-# 鼠标
+﻿# 鼠标
 
 用于拖动句柄、类画布 UI、悬停驱动菜单和 DOM 原生 `click` 或 `hover` 不足够的流程的低级指针控制。
 
-## CLI
+## 命令行界面
 
 ```bash
 pinchtab mouse move <x> <y>
@@ -132,4 +132,4 @@ curl -X POST http://localhost:9867/tabs/<tabId>/action \
 - [点击](./click.md)
 - [悬停](./hover.md)
 - [滚动](./scroll.md)
-- [CLI](./cli.md)
+- [命令行界面](./命令行界面.md)

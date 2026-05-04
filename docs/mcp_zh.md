@@ -1,4 +1,4 @@
-# MCP 服务器
+﻿# MCP 服务器
 
 PinchTab 包含一个原生的 [模型上下文协议 (MCP)](https://modelcontextprotocol.io/) 服务器，允许 AI 代理通过 stdio 上的 MCP 控制浏览器。
 

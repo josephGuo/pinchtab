@@ -1,4 +1,4 @@
-# 入门指南
+﻿# 入门指南
 
 在几分钟内让 PinchTab 运行起来，从零到浏览器自动化。
 
@@ -62,7 +62,7 @@ Windows 二进制文件可用，但 Windows 支持目前有限且尽力而为，
 
 ## Shell 自动完成
 
-安装后，您可以从 CLI 生成 shell 自动完成：
+安装后，您可以从 命令行界面 生成 shell 自动完成：
 
 ```bash
 # 生成并安装 zsh 自动完成
@@ -104,7 +104,7 @@ dashboard ready url=http://localhost:9867
 curl -s -X POST http://127.0.0.1:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 # 响应
 {
@@ -124,7 +124,7 @@ pinchtab instance start
 curl -s -X POST http://127.0.0.1:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/pinchtab/pinchtab"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab nav https://github.com/pinchtab/pinchtab
 # 响应
 {
@@ -138,7 +138,7 @@ pinchtab nav https://github.com/pinchtab/pinchtab
 
 ```bash
 curl -s "http://127.0.0.1:9867/snapshot?filter=interactive" | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab snap -i -c
 # 响应
 {

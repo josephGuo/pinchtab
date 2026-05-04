@@ -1,4 +1,4 @@
-# 健康状态
+﻿# 健康状态
 
 检查服务器状态和可用性。
 
@@ -8,7 +8,7 @@
 curl http://localhost:9867/health
 # 响应: {"status":"ok","tabs":1}
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab health
 # 输出: ok
 

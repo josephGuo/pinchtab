@@ -1,4 +1,4 @@
-# 填充
+﻿# 填充
 
 直接设置输入值，不依赖与 `type` 相同的事件序列。
 
@@ -6,13 +6,13 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"fill","ref":"e8","text":"ada@pinchtab.com"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab fill e8 "ada@pinchtab.com"
 # 响应（使用 --json 获取完整 JSON）
 OK
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

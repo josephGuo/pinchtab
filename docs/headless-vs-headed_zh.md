@@ -1,11 +1,11 @@
-# 无头模式 vs 有头模式
+﻿# 无头模式 vs 有头模式
 
 PinchTab 实例可以在两种模式下运行 Chrome：
 
 - **无头模式**：无可见浏览器窗口
 - **有头模式**：可见浏览器窗口
 
-您通常使用 `pinchtab` 运行一个服务器，然后通过 API 或 CLI 以任一模式启动实例。
+您通常使用 `pinchtab` 运行一个服务器，然后通过 API 或 命令行界面 以任一模式启动实例。
 
 ---
 
@@ -17,7 +17,7 @@ PinchTab 实例可以在两种模式下运行 Chrome：
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 # 响应
 {
@@ -53,7 +53,7 @@ pinchtab instance start
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --mode headed
 # 响应
 {
@@ -105,7 +105,7 @@ pinchtab instance start --mode headed
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --mode headed
 ```
 
@@ -129,7 +129,7 @@ curl -X POST http://localhost:9867/profiles \
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --profile prof_278be873 --mode headed
 # 响应
 {
@@ -153,7 +153,7 @@ for i in 1 2 3; do
     -H "Content-Type: application/json" \
     -d '{"mode":"headless"}' | jq .
 done
-# CLI 替代方案
+# 命令行界面 替代方案
 for i in 1 2 3; do
   pinchtab instance start
 done

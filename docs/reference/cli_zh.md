@@ -1,4 +1,4 @@
-# CLI 概览
+﻿# 命令行界面 概览
 
 `pinchtab` 有两种常规使用方式：
 
@@ -7,7 +7,7 @@
 
 当你需要一个引导式的本地控制界面时使用菜单模式。当你需要使用 shell 历史记录、脚本或通过 `--server` 进行远程目标操作时使用直接命令模式。
 
-当你使用 `--server` 目标指向远程服务器时，CLI 正在使用与仪表板和 HTTP API 相同的特权控制平面。不要将其用作不受信任用户或不受信任系统的访问路径。有关部署指南，请参阅 [安全](../guides/security.md)。
+当你使用 `--server` 目标指向远程服务器时，命令行界面 正在使用与仪表板和 HTTP API 相同的特权控制平面。不要将其用作不受信任用户或不受信任系统的访问路径。有关部署指南，请参阅 [安全](../guides/security.md)。
 
 ## 交互式菜单
 
@@ -49,15 +49,15 @@ pinchtab find "login button"
 pinchtab network --limit 20
 ```
 
-全局标志如 `--server` 和 `--agent-id` 适用于直接命令模式。`--agent-id` 会记录在活动日志和仪表板代理视图中，以便区分多个由 CLI 驱动的代理。
+全局标志如 `--server` 和 `--agent-id` 适用于直接命令模式。`--agent-id` 会记录在活动日志和仪表板代理视图中，以便区分多个由 命令行界面 驱动的代理。
 
 ## 代理归因
 
-CLI 请求通过 `X-Agent-Id` 请求头携带代理标识。
+命令行界面 请求通过 `X-Agent-Id` 请求头携带代理标识。
 
 - `--agent-id <value>` 为该命令显式设置头部
 - `PINCHTAB_AGENT_ID` 为当前 shell 或脚本设置默认代理 ID
-- 如果两者都未设置，CLI 使用 `cli`
+- 如果两者都未设置，命令行界面 使用 `命令行界面`
 
 该代理 ID 以 `agentId` 的形式出现在 `/api/activity`、代理页面和调度器驱动的活动中。
 
@@ -175,7 +175,7 @@ pinchtab click --tab <id> e5
 pinchtab pdf --tab <id> -o page.pdf
 ```
 
-## 从 CLI 配置
+## 从 命令行界面 配置
 
 `pinchtab config` 显示：
 
@@ -190,7 +190,7 @@ pinchtab pdf --tab <id> -o page.pdf
 
 有关文件架构详情和 `config get/set/patch`，请参阅 [配置](./config.md)。
 
-## 从 CLI 安全
+## 从 命令行界面 安全
 
 `pinchtab security` 是交互式安全屏幕。
 

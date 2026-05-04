@@ -1,4 +1,4 @@
-# 多实例
+﻿# 多实例
 
 PinchTab 可以同时运行多个隔离的 Chrome 实例。每个运行中的实例都有自己的浏览器进程、端口、标签页和基于配置文件的状态。
 
@@ -25,7 +25,7 @@ pinchtab server
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed","port":"9999"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --mode headed --port 9999
 # 响应
 {
@@ -82,7 +82,7 @@ curl http://localhost:9867/profiles
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"278be873adeb","mode":"headless"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --profile 278be873adeb --mode headless
 ```
 
@@ -110,7 +110,7 @@ curl http://localhost:9867/instances/metrics
 
 ```bash
 curl -X POST http://localhost:9867/instances/inst_0a89a5bb/stop
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance stop inst_0a89a5bb
 # 响应
 {

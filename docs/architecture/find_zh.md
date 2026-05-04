@@ -1,4 +1,4 @@
-# Find 架构
+﻿# Find 架构
 
 本页介绍 PinchTab 语义 `find` 管道背后的实现细节。
 

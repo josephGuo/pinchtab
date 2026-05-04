@@ -1,4 +1,4 @@
-# 解决
+﻿# 解决
 
 检测并解决当前页面上的浏览器挑战（Cloudflare Turnstile、CAPTCHAs、 interstitial 等）。
 

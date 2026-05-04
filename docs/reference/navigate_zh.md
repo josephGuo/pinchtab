@@ -1,4 +1,4 @@
-# 导航
+﻿# 导航
 
 打开新标签页并导航到 URL，或者在提供标签页 ID 时重用标签页。
 
@@ -6,13 +6,13 @@
 curl -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab nav https://pinchtab.com
 # 响应（默认为标签页 ID；使用 --json 获取完整 JSON）
 8f9c7d4e1234567890abcdef12345678
 ```
 
-## CLI 标志
+## 命令行界面 标志
 
 | 标志 | 描述 |
 |------|-------------|

@@ -1,4 +1,4 @@
-# 仪表板
+﻿# 仪表板
 
 PinchTab 包含一个内置的 Web 仪表板，用于监控实例、管理配置文件和编辑配置。
 
@@ -98,7 +98,7 @@ curl -X POST http://localhost:9867/profiles \
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --profile prof_278be873 --mode headed
 # 响应
 {
@@ -235,7 +235,7 @@ curl http://localhost:9867/health
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 ```
 

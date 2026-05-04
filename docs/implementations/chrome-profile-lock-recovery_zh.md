@@ -1,4 +1,4 @@
-# Chrome 配置文件锁恢复
+﻿# Chrome 配置文件锁恢复
 
 Chrome 在其用户数据目录中使用 `SingletonLock` 文件来防止多个实例同时共享同一个配置文件。如果 PinchTab 或 Chrome 崩溃，这个锁文件（以及相关的 `SingletonSocket` 和 `SingletonCookie` 文件）可能会被遗留下来，导致下一次 PinchTab 启动失败，错误信息为：
 

@@ -1,4 +1,4 @@
-# 配置文件
+﻿# 配置文件
 
 配置文件是浏览器用户数据目录。它们存储 cookie、本地存储、历史记录和其他持久浏览器状态。
 
@@ -14,14 +14,14 @@
 curl http://localhost:9867/profiles
 # 响应: JSON 数组（见下文）
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab profiles
 # 输出: prof_278be873  work
 
 pinchtab profiles --json              # 完整 JSON 响应
 ```
 
-`pinchtab profiles` 是从 CLI 查看可用配置文件的最简单方法。
+`pinchtab profiles` 是从 命令行界面 查看可用配置文件的最简单方法。
 
 响应形状：
 
@@ -87,7 +87,7 @@ curl -X POST http://localhost:9867/profiles \
 
 注意：
 
-- 没有 `pinchtab profile create` CLI 命令
+- 没有 `pinchtab profile create` 命令行界面 命令
 - `POST /profiles` 和 `POST /profiles/create` 都可以用于创建配置文件
 
 ## 更新配置文件

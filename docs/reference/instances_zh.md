@@ -1,4 +1,4 @@
-# 实例
+﻿# 实例
 
 实例是由 PinchTab 管理的运行中 Chrome 进程。每个管理实例都有：
 
@@ -16,14 +16,14 @@
 curl http://localhost:9867/instances
 # 响应：JSON 数组（见下文）
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab instances
 # 输出：inst_0a89  9999  headed  running
 
 pinchtab instances --json              # 完整 JSON 响应
 ```
 
-`pinchtab instances` 是从 CLI 检查当前实例群的最简单方法。
+`pinchtab instances` 是从 命令行界面 检查当前实例群的最简单方法。
 
 响应形状：
 
@@ -56,7 +56,7 @@ pinchtab instances --json              # 完整 JSON 响应
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed","port":"9999","securityPolicy":{"allowedDomains":["wikipedia.org","wikimedia.org"]}}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --profile prof_278be873 --mode headed --port 9999 --allow-domain wikipedia.org --allow-domain wikimedia.org
 ```
 
@@ -71,7 +71,7 @@ pinchtab instance start --profile prof_278be873 --mode headed --port 9999 --allo
 
 - 如果省略 `profileId`，PinchTab 会创建一个自动生成的临时配置文件
 - 如果省略 `port`，PinchTab 会从配置的实例端口范围中分配一个
-- CLI 标志是 `--profile`，即使 API 字段是 `profileId`
+- 命令行界面 标志是 `--profile`，即使 API 字段是 `profileId`
 - `securityPolicy.allowedDomains` 仅为该实例与服务器级 `security.allowedDomains` 基线合并
 - 您可以在不更改服务器默认值的情况下扩展单个实例。例如，`{"securityPolicy":{"allowedDomains":["*"]}}` 使该实例不受限制，而其他实例仍使用服务器基线
 - 请求提供的扩展路径被拒绝；改为在服务器上配置 `browser.extensionPaths`。默认情况下，PinchTab 使用其状态/配置文件夹下的本地 `extensions/` 目录。
@@ -122,7 +122,7 @@ curl http://localhost:9867/instances/inst_ea2e747f
 
 ```bash
 curl http://localhost:9867/instances/inst_ea2e747f/logs
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance logs inst_ea2e747f
 ```
 
@@ -132,7 +132,7 @@ pinchtab instance logs inst_ea2e747f
 
 ```bash
 curl -X POST http://localhost:9867/instances/inst_ea2e747f/stop
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance stop inst_ea2e747f
 ```
 
@@ -158,7 +158,7 @@ curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
   -d '{"url":"https://pinchtab.com"}'
 ```
 
-没有专用的实例范围 `tab open` CLI 命令。CLI 快捷方式是：
+没有专用的实例范围 `tab open` 命令行界面 命令。命令行界面 快捷方式是：
 
 ```bash
 pinchtab instance navigate inst_ea2e747f https://pinchtab.com
@@ -196,7 +196,7 @@ curl -X POST http://localhost:9867/instances/attach \
 
 注意：
 
-- 没有 CLI 附加命令
+- 没有 命令行界面 附加命令
 - 仅当在 `security.attach` 下的配置中启用时才允许附加
 - `security.attach.allowHosts` 必须允许 `cdpUrl` 主机
 - `allowHosts: ["*"]` 是记录的、非默认的、降低安全性的覆盖。它完全禁用主机允许列表，并允许任何具有允许方案的可访问 CDP 主机。仅在隔离的、操作员控制的网络上使用。

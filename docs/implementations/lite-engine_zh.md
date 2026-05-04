@@ -1,4 +1,4 @@
-# Lite 引擎
+﻿# Lite 引擎
 
 PinchTab 包含一个**Lite 引擎**，可以执行 DOM 捕获 — 导航、快照、文本提取、点击和输入 — 而不需要 Chrome 或 Chromium。它由 [Gost-DOM](https://github.com/gost-dom/browser)（v0.11.0，MIT 许可证）提供支持，这是一个用纯 Go 编写的无头浏览器。
 

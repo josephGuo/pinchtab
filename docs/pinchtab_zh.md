@@ -1,10 +1,10 @@
-# PinchTab
+﻿# PinchTab
 
 欢迎使用 PinchTab：为 AI 代理、脚本和自动化工作流提供浏览器控制。
 
 ## PinchTab 是什么
 
-PinchTab 是一个独立的 HTTP 服务器，通过 CLI 和 HTTP API 为您提供对 Chrome 的直接控制。
+PinchTab 是一个独立的 HTTP 服务器，通过 命令行界面 和 HTTP API 为您提供对 Chrome 的直接控制。
 
 PinchTab 有两个运行时：
 
@@ -44,7 +44,7 @@ pinchtab server
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 # 响应
 {
@@ -64,7 +64,7 @@ pinchtab instance start
 curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab nav https://pinchtab.com
 # 响应
 {
@@ -78,7 +78,7 @@ pinchtab nav https://pinchtab.com
 
 ```bash
 curl -s "http://localhost:9867/snapshot?filter=interactive" | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab snap -i -c
 # 响应
 {
@@ -95,7 +95,7 @@ pinchtab snap -i -c
 curl -s -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e1"}' | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab click e1
 # 响应
 {

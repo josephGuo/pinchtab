@@ -1,4 +1,4 @@
-# 附加 Chrome
+﻿# 附加 Chrome
 
 当以下情况时使用本指南：
 
@@ -51,7 +51,7 @@
 }
 ```
 
-目前没有 CLI 附加命令。
+目前没有 命令行界面 附加命令。
 
 ---
 
@@ -151,7 +151,7 @@ curl -X POST http://localhost:9867/instances/attach \
 
 ```bash
 curl -s http://localhost:9867/instances | jq .
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instances
 ```
 
@@ -236,6 +236,6 @@ pinchtab
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start
 ```

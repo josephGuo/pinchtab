@@ -1,4 +1,4 @@
-# 核心概念
+﻿# 核心概念
 
 本文档描述了 PinchTab 中当前实现的概念。
 
@@ -131,7 +131,7 @@ curl -X POST http://localhost:9867/instances/start \
     "profileId": "prof_278be873",
     "mode": "headed"
   }'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab instance start --profile prof_278be873 --mode headed
 # 响应
 {

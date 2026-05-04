@@ -1,4 +1,4 @@
-# MCP 工具参考
+﻿# MCP 工具参考
 
 PinchTab 当前公开 34 个 MCP 工具。所有工具名称都以 `pinchtab_` 为前缀，并通过标准输入/输出 JSON-RPC 提供。
 

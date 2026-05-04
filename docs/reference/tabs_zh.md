@@ -1,8 +1,8 @@
-# 标签页
+﻿# 标签页
 
 标签页是浏览、提取、交互和诊断的主要执行表面。
 
-一旦你已有标签页 ID，就可以使用标签页范围的 HTTP 路由。在 CLI 中，使用带有 `--tab <id>` 的正常顶级浏览器命令。
+一旦你已有标签页 ID，就可以使用标签页范围的 HTTP 路由。在 命令行界面 中，使用带有 `--tab <id>` 的正常顶级浏览器命令。
 
 `pinchtab tab` 本身仅用于：
 
@@ -15,7 +15,7 @@
 
 ## 顶级浏览器命令
 
-这些页面涵盖了简写路由和匹配的 CLI 命令：
+这些页面涵盖了简写路由和匹配的 命令行界面 命令：
 
 - [健康](./health.md)
 - [导航](./navigate.md)
@@ -48,7 +48,7 @@ curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
 }
 ```
 
-仍然没有专用的实例范围标签页打开 CLI 命令。CLI 快捷方式是：
+仍然没有专用的实例范围标签页打开 命令行界面 命令。命令行界面 快捷方式是：
 
 ```bash
 pinchtab instance navigate inst_ea2e747f https://pinchtab.com
@@ -74,7 +74,7 @@ curl http://localhost:9867/tabs
   ]
 }
 
-# CLI 替代方案（默认人类可读）
+# 命令行界面 替代方案（默认人类可读）
 pinchtab tab
 # 输出: *8f9c7d4e...  https://pinchtab.com  PinchTab
 
@@ -101,7 +101,7 @@ curl http://localhost:9867/instances/tabs
 
 当你需要编排器范围的视图时，使用 `GET /instances/tabs`。
 
-## 从 CLI 聚焦、创建和关闭
+## 从 命令行界面 聚焦、创建和关闭
 
 ```bash
 pinchtab tab                           # 列出标签页
@@ -116,7 +116,7 @@ pinchtab tab close 8f9c7d4e1234...     # 关闭标签页
 
 ## 操作现有标签页
 
-使用标签页范围的 HTTP 路由或带有 `--tab` 的顶级 CLI 命令。
+使用标签页范围的 HTTP 路由或带有 `--tab` 的顶级 命令行界面 命令。
 
 ### 导航
 
@@ -124,7 +124,7 @@ pinchtab tab close 8f9c7d4e1234...     # 关闭标签页
 curl -X POST http://localhost:9867/tabs/<tabId>/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab nav https://pinchtab.com --tab <tabId>
 ```
 
@@ -132,7 +132,7 @@ pinchtab nav https://pinchtab.com --tab <tabId>
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/snapshot?interactive=true&compact=true"
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab snap --tab <tabId> -i -c
 ```
 
@@ -140,7 +140,7 @@ pinchtab snap --tab <tabId> -i -c
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/text?mode=raw"
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab text --tab <tabId> --raw
 ```
 
@@ -150,7 +150,7 @@ pinchtab text --tab <tabId> --raw
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"login button"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab find --tab <tabId> "login button"
 ```
 
@@ -160,7 +160,7 @@ pinchtab find --tab <tabId> "login button"
 curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e5"}'
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab click --tab <tabId> e5
 pinchtab fill --tab <tabId> '#email' 'ada@example.com'
 pinchtab wait --tab <tabId> 'text:Done'
@@ -182,7 +182,7 @@ curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"mouse-wheel","x":400,"y":320,"deltaY":240}'
 
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab mouse move --tab <tabId> e5
 pinchtab mouse down --tab <tabId> --button left
 pinchtab mouse wheel --tab <tabId> 240 --dx 40
@@ -190,7 +190,7 @@ pinchtab mouse wheel --tab <tabId> 240 --dx 40
 
 ### 切换状态
 
-人工切换是标签页范围的，可通过 CLI 或 API 使用。
+人工切换是标签页范围的，可通过 命令行界面 或 API 使用。
 
 ```bash
 pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
@@ -221,7 +221,7 @@ curl -X POST http://localhost:9867/tabs/<tabId>/resume \
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/screenshot?raw=true" > out.jpg
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab screenshot --tab <tabId> -o out.jpg
 ```
 
@@ -229,7 +229,7 @@ pinchtab screenshot --tab <tabId> -o out.jpg
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/pdf?raw=true" > page.pdf
-# CLI 替代方案
+# 命令行界面 替代方案
 pinchtab pdf --tab <tabId> -o page.pdf
 ```
 
@@ -242,7 +242,7 @@ curl -X POST http://localhost:9867/tabs/<tabId>/cookies \
   -d '{"cookies":[{"name":"session","value":"abc"}]}'
 ```
 
-目前没有专用的顶级 cookies CLI 命令。
+目前没有专用的顶级 cookies 命令行界面 命令。
 
 ## 指标
 
@@ -272,5 +272,5 @@ curl -X POST http://localhost:9867/tabs/<tabId>/unlock \
 
 - 没有用于获取单个标签页元数据的 `GET /tabs/{id}` 端点。
 - `GET /tabs` 和 `GET /instances/tabs` 服务于不同的目的，不可互换。
-- 在 CLI 中，标签页范围的工作通过带有 `--tab` 的顶级命令进行，而不是通过 `pinchtab tab <subcommand>` 变体。
-- 目前没有专用的 CLI `handoff` 或 `resume` 命令。
+- 在 命令行界面 中，标签页范围的工作通过带有 `--tab` 的顶级命令进行，而不是通过 `pinchtab tab <subcommand>` 变体。
+- 目前没有专用的 命令行界面 `handoff` 或 `resume` 命令。

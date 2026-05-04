@@ -1,6 +1,6 @@
-# 配置
+﻿# 配置
 
-`pinchtab config` 是创建、检查、验证和编辑 PinchTab 配置文件的 CLI 入口点。
+`pinchtab config` 是创建、检查、验证和编辑 PinchTab 配置文件的 命令行界面 入口点。
 
 有关安全状态、令牌使用、敏感端点策略和 IDPI 指南，请参阅 [安全](../guides/security.md)。
 
@@ -117,7 +117,7 @@ PinchTab 按以下顺序应用配置：
 - `PINCHTAB_CONFIG`：选择配置文件路径
 - `PINCHTAB_TOKEN`：在运行时覆盖 API 令牌
 
-对于远程 CLI 目标，使用根 `--server` 标志而不是配置。
+对于远程 命令行界面 目标，使用根 `--server` 标志而不是配置。
 
 ## 配置文件位置
 
@@ -127,7 +127,7 @@ PinchTab 按以下顺序应用配置：
 - Linux：`~/.pinchtab/config.json`
 - Windows：`%APPDATA%\pinchtab\config.json`
 
-在 macOS 和 Linux 上，PinchTab 默认使用 `~/.pinchtab`，因此 CLI、npm 管理的二进制文件和配置文件都使用相同的基本目录。
+在 macOS 和 Linux 上，PinchTab 默认使用 `~/.pinchtab`，因此 命令行界面、npm 管理的二进制文件和配置文件都使用相同的基本目录。
 
 使用以下命令覆盖配置路径：
 
@@ -479,4 +479,4 @@ pinchtab config set server.cookieSecure auto
 
 - `config show` 报告有效的运行时值，而不仅仅是原始文件内容。
 - `config get`、`set` 和 `patch` 操作文件配置模型，而不是瞬态运行时覆盖。
-- 仪表板配置 API 将 `server.token` 视为只写；使用 CLI 或文件编辑来管理它。
+- 仪表板配置 API 将 `server.token` 视为只写；使用 命令行界面 或文件编辑来管理它。
