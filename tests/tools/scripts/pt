@@ -69,6 +69,10 @@ if [[ -n "${PINCHTAB_SESSION:-}" ]]; then
   args+=(-e "PINCHTAB_SESSION=${PINCHTAB_SESSION}")
 fi
 
+if [[ -n "${PINCHTAB_AGENT_ID:-}" ]]; then
+  args+=(-e "PINCHTAB_AGENT_ID=${PINCHTAB_AGENT_ID}")
+fi
+
 args+=("${PINCHTAB_CONTAINER}" pinchtab "$@")
 
 exec "${args[@]}"

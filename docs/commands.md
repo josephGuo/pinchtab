@@ -49,6 +49,11 @@ pinchtab click --tab <id> <selector>
 pinchtab pdf --tab <id> -o page.pdf
 ```
 
+Unscoped tab commands use server-side current-tab state when the caller is
+identified: `PINCHTAB_SESSION` scopes current tabs by session, while
+`--agent-id` or `PINCHTAB_AGENT_ID` scopes them by agent ID when no session is
+present. Anonymous CLI calls keep using the shared local current-tab state file.
+
 ## Interaction
 
 Most element commands accept a unified selector:

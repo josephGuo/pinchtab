@@ -214,7 +214,7 @@ func (h *Handlers) handleWaitCore(w http.ResponseWriter, r *http.Request, req wa
 	// All other modes need a browser tab.
 	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {

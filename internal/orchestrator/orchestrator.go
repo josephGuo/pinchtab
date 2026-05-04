@@ -2,7 +2,9 @@ package orchestrator
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,11 +47,24 @@ type Orchestrator struct {
 	client         *http.Client
 	childAuthToken string
 	allowEvaluate  bool
-	portAllocator  *PortAllocator
-	idMgr          *ids.Manager
-	eventHandlers  []EventHandler
-	instanceMgr    *instance.Manager
-	runtimeCfg     *config.RuntimeConfig
+	internalToken  string
+	bindings       *Bindings
+
+	// strictCrossInstanceTab toggles the cross-instance explicit-tab rule.
+	// When false (default), a request that targets a tab on a different
+	// instance than the caller's existing identity binding rebinds the
+	// caller to the owner instance. When true, such requests return
+	// 409 cross_instance_tab and the binding is left untouched.
+	strictCrossInstanceTab bool
+
+	// tabsCache stores per-instance snapshots of /tabs results to absorb
+	// repeated dashboard visibility queries. Routing never reads it.
+	tabsCache     *TabsCache
+	portAllocator *PortAllocator
+	idMgr         *ids.Manager
+	eventHandlers []EventHandler
+	instanceMgr   *instance.Manager
+	runtimeCfg    *config.RuntimeConfig
 }
 
 // OnEvent adds an event handler for instance lifecycle events.
@@ -93,6 +108,20 @@ type InstanceInternal struct {
 type LaunchOptions struct {
 	ExtensionPaths []string
 	SecurityPolicy *bridge.SecurityPolicy
+}
+
+// generateInternalToken returns a random hex string used as the shared
+// secret between the orchestrator and its spawned instances. The token
+// authorizes orchestrator → instance proxy hops as trusted-internal,
+// allowing X-PinchTab-* identity headers to flow through.
+func generateInternalToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// Best effort: an empty token disables trusted-internal-proxy and
+		// falls back to header stripping on the instance side.
+		return ""
+	}
+	return hex.EncodeToString(b)
 }
 
 func NewOrchestrator(baseDir string) *Orchestrator {
@@ -143,9 +172,25 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 		client:         &http.Client{Timeout: 60 * time.Second},
 		childAuthToken: "",
 		allowEvaluate:  false,
+		internalToken:  generateInternalToken(),
+		bindings:       NewBindings(nil),
+		tabsCache:      NewTabsCache(0, nil),
 		portAllocator:  NewPortAllocator(9868, 9968),
 		idMgr:          ids.NewManager(),
 	}
+
+	// Drop identity → instance bindings and any cached tab snapshots when
+	// an instance stops or errors so a restarted instance does not keep
+	// receiving routed traffic and dashboards do not show ghost tabs.
+	orch.OnEvent(func(evt InstanceEvent) {
+		switch evt.Type {
+		case "instance.stopped", "instance.error":
+			if evt.Instance != nil {
+				orch.bindings.ClearInstance(evt.Instance.ID)
+				orch.tabsCache.Invalidate(evt.Instance.ID)
+			}
+		}
+	})
 
 	bridgeClient := instance.NewBridgeClient()
 	orch.instanceMgr = instance.NewManager(
@@ -154,6 +199,50 @@ func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator 
 	)
 
 	return orch
+}
+
+// RunMaintenance runs periodic background maintenance tasks for the
+// orchestrator (currently: pruning idle agent bindings). Returns when ctx
+// is cancelled.
+func (o *Orchestrator) RunMaintenance(ctx context.Context) {
+	if o == nil {
+		return
+	}
+	const (
+		tick     = 5 * time.Minute
+		idleTTL  = 1 * time.Hour
+		maxAgent = 10000
+	)
+	t := time.NewTicker(tick)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			o.bindings.PruneAgents(idleTTL, maxAgent)
+		}
+	}
+}
+
+// Bindings returns the identity → instance binding map. Exposed for tests
+// and for handlers that need to inspect routing state.
+func (o *Orchestrator) Bindings() *Bindings {
+	if o == nil {
+		return nil
+	}
+	return o.bindings
+}
+
+// SetStrictCrossInstanceTab toggles strict cross-instance handling. See
+// the strictCrossInstanceTab field for semantics.
+func (o *Orchestrator) SetStrictCrossInstanceTab(strict bool) {
+	if o == nil {
+		return
+	}
+	o.mu.Lock()
+	o.strictCrossInstanceTab = strict
+	o.mu.Unlock()
 }
 
 // InstanceManager returns the decomposed instance manager.
@@ -362,6 +451,9 @@ func (o *Orchestrator) LaunchWithOptions(name, port string, headless bool, opts 
 	envOverrides := map[string]string{
 		"PINCHTAB_PORT":   port,
 		"PINCHTAB_CONFIG": childConfigPath,
+	}
+	if o.internalToken != "" {
+		envOverrides["PINCHTAB_INTERNAL_TOKEN"] = o.internalToken
 	}
 	env := mergeEnvWithOverrides(filterEnvWithPrefixes(os.Environ(), "PINCHTAB_"), envOverrides)
 
@@ -862,7 +954,41 @@ func (o *Orchestrator) FirstRunningURL() string {
 	return candidates[0].url
 }
 
+// instanceTabsCached returns the tab list for inst using the per-instance
+// cache. fresh=true forces a bypass and refresh. Returned tabs are
+// InstanceTab-shaped (with InstanceID set) so callers can hand them
+// straight to JSON encoders.
+func (o *Orchestrator) instanceTabsCached(inst *InstanceInternal, fresh bool) ([]bridge.InstanceTab, error) {
+	if inst == nil {
+		return nil, fmt.Errorf("nil instance")
+	}
+	if !fresh {
+		if cached, ok := o.tabsCache.Get(inst.ID); ok {
+			return cached, nil
+		}
+	}
+	tabs, err := o.fetchTabs(inst)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]bridge.InstanceTab, 0, len(tabs))
+	for _, tab := range tabs {
+		out = append(out, bridge.InstanceTab{
+			ID:         tab.ID,
+			InstanceID: inst.ID,
+			URL:        tab.URL,
+			Title:      tab.Title,
+		})
+	}
+	o.tabsCache.Set(inst.ID, out)
+	return out, nil
+}
+
 func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
+	return o.allTabs(false)
+}
+
+func (o *Orchestrator) allTabs(fresh bool) []bridge.InstanceTab {
 	o.mu.RLock()
 	instances := make([]*InstanceInternal, 0)
 	for _, inst := range o.instances {
@@ -874,18 +1000,11 @@ func (o *Orchestrator) AllTabs() []bridge.InstanceTab {
 
 	all := make([]bridge.InstanceTab, 0)
 	for _, inst := range instances {
-		tabs, err := o.fetchTabs(inst)
+		tabs, err := o.instanceTabsCached(inst, fresh)
 		if err != nil {
 			continue
 		}
-		for _, tab := range tabs {
-			all = append(all, bridge.InstanceTab{
-				ID:         tab.ID,
-				InstanceID: inst.ID,
-				URL:        tab.URL,
-				Title:      tab.Title,
-			})
-		}
+		all = append(all, tabs...)
 	}
 	return all
 }

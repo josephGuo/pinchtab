@@ -134,8 +134,14 @@ func (o *Orchestrator) proxyToURL(w http.ResponseWriter, r *http.Request, target
 				o.applyInstanceAuth(req, inst)
 			}
 		},
-		OnResponseHeaders: o.handleProxyResponseHeaders,
-		OnResponse:        enrichActivityFromResponse,
+		OnResponseHeaders: func(origReq *http.Request, resp *http.Response) {
+			var targetInstanceID string
+			if inst := o.proxyTargetInstance(targetURL); inst != nil {
+				targetInstanceID = inst.ID
+			}
+			o.handleProxyResponseHeaders(origReq, resp, targetInstanceID)
+		},
+		OnResponse: enrichActivityFromResponse,
 	})
 }
 
@@ -312,6 +318,13 @@ func (o *Orchestrator) applyInstanceAuth(req *http.Request, inst *InstanceIntern
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	// Mark spawned-child hops as trusted-internal-proxy so the instance
+	// honors X-PinchTab-* identity headers we propagate. Attached external
+	// bridges have their own auth domain and won't recognize the token,
+	// which is the desired behavior.
+	if inst.authToken == "" && o.internalToken != "" {
+		req.Header.Set(handlers.InternalTokenHeader, o.internalToken)
+	}
 }
 
 // classifyLaunchError returns appropriate HTTP status code for launch errors.
@@ -349,22 +362,109 @@ func enrichActivityFromResponse(origReq *http.Request, body []byte) {
 	}
 }
 
-func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *http.Response) {
-	if o == nil || o.instanceMgr == nil || origReq == nil || resp == nil {
+func (o *Orchestrator) handleProxyResponseHeaders(origReq *http.Request, resp *http.Response, targetInstanceID string) {
+	if o == nil || origReq == nil || resp == nil {
 		return
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return
 	}
-	if tabID := tabClosePathID(origReq); tabID != "" {
-		o.instanceMgr.InvalidateTab(tabID)
-		return
-	}
-	if origReq.Method == http.MethodPost && strings.TrimSpace(origReq.URL.Path) == "/close" {
-		if tabID := strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)); tabID != "" {
+
+	// Tab close → invalidate locator entry. Pre-existing behavior, kept
+	// here so callers continue to get cache freshness for free.
+	if o.instanceMgr != nil {
+		if tabID := tabClosePathID(origReq); tabID != "" {
 			o.instanceMgr.InvalidateTab(tabID)
+		} else if origReq.Method == http.MethodPost && strings.TrimSpace(origReq.URL.Path) == "/close" {
+			if tabID := strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)); tabID != "" {
+				o.instanceMgr.InvalidateTab(tabID)
+			}
 		}
 	}
+
+	// Identity → instance binding writes. Bindings are persisted only after
+	// a successful proxy response so failed requests never create or move
+	// routing state.
+	if o.bindings != nil && targetInstanceID != "" {
+		if id := sessionIDForRouting(origReq); id != "" {
+			o.bindings.BindSession(id, targetInstanceID)
+		}
+		if id := strings.TrimSpace(origReq.Header.Get(activity.HeaderAgentID)); id != "" {
+			o.bindings.BindAgent(id, targetInstanceID)
+		}
+	}
+
+	// Tabs cache invalidation. Any successful response that may have
+	// changed the instance's tab list (open/close/navigate/history) drops
+	// the cached snapshot so the next dashboard read picks up fresh data.
+	if o.tabsCache != nil && targetInstanceID != "" && tabsCacheRequestAffectsTabs(origReq, resp) {
+		o.tabsCache.Invalidate(targetInstanceID)
+	}
+}
+
+// tabsCacheRequestAffectsTabs reports whether a successful response should
+// invalidate the per-instance tabs cache. Errs on the side of invalidating
+// rather than serving stale data — the cache is a perf optimization, not
+// a correctness guarantee.
+func tabsCacheRequestAffectsTabs(req *http.Request, resp *http.Response) bool {
+	if req == nil {
+		return false
+	}
+	// X-PinchTab-Tab-Id is a strong signal something changed; invalidate
+	// regardless of the route the request hit.
+	if resp != nil {
+		if strings.TrimSpace(resp.Header.Get(activity.HeaderPTTabID)) != "" {
+			return true
+		}
+	}
+	if req.Method != http.MethodPost {
+		return false
+	}
+	path := strings.TrimSpace(req.URL.Path)
+	switch path {
+	case "/tab", "/close", "/navigate", "/reload", "/back", "/forward":
+		return true
+	}
+	if subpath := instanceRouteSubpath(path); subpath != "" {
+		switch subpath {
+		case "/tabs/open", "/tab", "/close", "/navigate", "/reload", "/back", "/forward":
+			return true
+		}
+		if strings.HasPrefix(subpath, "/tabs/") {
+			switch {
+			case strings.HasSuffix(subpath, "/close"),
+				strings.HasSuffix(subpath, "/navigate"),
+				strings.HasSuffix(subpath, "/reload"),
+				strings.HasSuffix(subpath, "/back"),
+				strings.HasSuffix(subpath, "/forward"):
+				return true
+			}
+		}
+	}
+	if strings.HasPrefix(path, "/tabs/") {
+		// Sub-routes that mutate tab state: /tabs/{id}/{close,navigate,reload,back,forward}
+		switch {
+		case strings.HasSuffix(path, "/close"),
+			strings.HasSuffix(path, "/navigate"),
+			strings.HasSuffix(path, "/reload"),
+			strings.HasSuffix(path, "/back"),
+			strings.HasSuffix(path, "/forward"):
+			return true
+		}
+	}
+	return false
+}
+
+func instanceRouteSubpath(path string) string {
+	if !strings.HasPrefix(path, "/instances/") {
+		return ""
+	}
+	rest := strings.TrimPrefix(path, "/instances/")
+	_, subpath, ok := strings.Cut(rest, "/")
+	if !ok || subpath == "" {
+		return ""
+	}
+	return "/" + subpath
 }
 
 func tabClosePathID(r *http.Request) string {

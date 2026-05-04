@@ -260,7 +260,8 @@ func TestReportDataAddsFailureWhenSuiteExitsAfterPassedResults(t *testing.T) {
 	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(resultsDir, "output-api.log"), []byte("E2E_RESULT\tpassed\t12\t[browser-basic] browser: health\n"), 0o644); err != nil {
+	logContent := "E2E_RESULT\tpassed\t12\t[browser-basic] browser: health\n\x1b[0;34m▶ [sessions-basic] pinchtab session create\x1b[0m\njq: parse error: Invalid numeric literal at line 2, column 0\n"
+	if err := os.WriteFile(filepath.Join(resultsDir, "output-api.log"), []byte(logContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -271,6 +272,12 @@ func TestReportDataAddsFailureWhenSuiteExitsAfterPassedResults(t *testing.T) {
 	}
 	if got := data.Results[1].Name; got != "Suite exited with an error after the last emitted test result" {
 		t.Fatalf("unexpected synthetic failure name: %q", got)
+	}
+	if !strings.Contains(data.ErrorTail, "jq: parse error") {
+		t.Fatalf("expected ErrorTail to contain jq error, got: %q", data.ErrorTail)
+	}
+	if strings.Contains(data.ErrorTail, "\x1b") {
+		t.Fatalf("ErrorTail should not contain ANSI escapes: %q", data.ErrorTail)
 	}
 }
 
@@ -325,6 +332,34 @@ func TestPrintSuiteSummaryFromGoReportData(t *testing.T) {
 		"Suite wall time: 1.500s",
 		"Failed tests:",
 		"- [browser-basic] browser: bad",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("summary output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestPrintSuiteSummaryShowsErrorTail(t *testing.T) {
+	var stdout bytes.Buffer
+	r := &Runner{stdout: &stdout}
+	data := suiteReportData{
+		Results: []suiteTestResult{
+			{Name: "[browser-basic] browser: health", Status: "passed", DurationMs: 12},
+			{Name: "Suite exited with an error after the last emitted test result", Status: "failed", DurationMs: 1500},
+		},
+		Passed:    1,
+		Failed:    1,
+		TotalMs:   1512,
+		ErrorTail: "▶ [sessions-basic] pinchtab session create\njq: parse error: Invalid numeric literal at line 2, column 0",
+	}
+
+	r.printSuiteSummary(suiteDef{Name: "cli-extended", RunSuite: "cli-extended"}, data, 1500*time.Millisecond)
+
+	out := stdout.String()
+	for _, want := range []string{
+		"Error output (last lines):",
+		"jq: parse error: Invalid numeric literal at line 2, column 0",
+		"[sessions-basic] pinchtab session create",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("summary output missing %q:\n%s", want, out)
@@ -444,6 +479,97 @@ func TestWriteGitHubActionsMetadataAddsRunnerFailureWithoutSuiteResults(t *testi
 		if !strings.Contains(string(output), want) {
 			t.Fatalf("GitHub output missing %q:\n%s", want, output)
 		}
+	}
+}
+
+func TestBuildSharedStackRetriesNoCacheOnBuildKitSnapshotFailure(t *testing.T) {
+	tmp := t.TempDir()
+	callsPath := filepath.Join(tmp, "calls.txt")
+	scriptPath := filepath.Join(tmp, "compose.sh")
+	t.Setenv("CALLS_FILE", callsPath)
+
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS_FILE"
+case "$*" in
+  *"build --no-cache"*)
+    exit 0
+    ;;
+  *"build"*)
+    echo "failed to solve: failed to stat active key during commit: snapshot abc does not exist: not found" >&2
+    exit 17
+    ;;
+esac
+exit 0
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	r := &Runner{
+		stdout:   &stdout,
+		stderr:   &stderr,
+		repoRoot: tmp,
+		compose:  []string{scriptPath},
+		logsMode: "hide",
+	}
+
+	if code := r.buildSharedStack("compose.yml"); code != 0 {
+		t.Fatalf("buildSharedStack returned %d, stderr: %s", code, stderr.String())
+	}
+	calls, err := os.ReadFile(callsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"-f compose.yml build",
+		"-f compose.yml build --no-cache",
+	} {
+		if !strings.Contains(string(calls), want) {
+			t.Fatalf("expected compose call %q, got:\n%s", want, calls)
+		}
+	}
+	if !strings.Contains(stdout.String(), "retrying shared-stack build with --no-cache") {
+		t.Fatalf("stdout should mention retry, got:\n%s", stdout.String())
+	}
+}
+
+func TestBuildSharedStackDoesNotRetryNonCacheFailure(t *testing.T) {
+	tmp := t.TempDir()
+	callsPath := filepath.Join(tmp, "calls.txt")
+	scriptPath := filepath.Join(tmp, "compose.sh")
+	t.Setenv("CALLS_FILE", callsPath)
+
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$CALLS_FILE"
+echo "real build error" >&2
+exit 23
+`
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	r := &Runner{
+		stdout:   &stdout,
+		stderr:   &stderr,
+		repoRoot: tmp,
+		compose:  []string{scriptPath},
+		logsMode: "hide",
+	}
+
+	if code := r.buildSharedStack("compose.yml"); code != 23 {
+		t.Fatalf("buildSharedStack returned %d, want 23; stderr: %s", code, stderr.String())
+	}
+	calls, err := os.ReadFile(callsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(calls), "build") != 1 {
+		t.Fatalf("non-cache failure should not retry, calls:\n%s", calls)
+	}
+	if strings.Contains(stdout.String(), "--no-cache") {
+		t.Fatalf("stdout should not mention no-cache retry, got:\n%s", stdout.String())
 	}
 }
 

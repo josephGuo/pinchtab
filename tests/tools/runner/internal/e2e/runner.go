@@ -568,11 +568,37 @@ func (r *Runner) planSuites(defs []suiteDef) ([]suitePlan, int) {
 }
 
 func (r *Runner) bringUpSharedStack(composeFile string, services []string) int {
-	if code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, "build")); code != 0 {
+	if code := r.buildSharedStack(composeFile); code != 0 {
 		return code
 	}
 	args := append([]string{"up", "-d"}, services...)
 	return r.runLoggedCommand("starting shared stack", stackOutput, r.composeArgs(composeFile, args...))
+}
+
+func (r *Runner) buildSharedStack(composeFile string) int {
+	code := r.runLoggedCommand("building shared-stack images", stackOutput, r.composeArgs(composeFile, "build"))
+	if code == 0 {
+		return 0
+	}
+	if !r.stackOutputHasBuildKitCacheFailure() {
+		return code
+	}
+	_, _ = fmt.Fprintln(r.stdout, "  build cache looked stale; retrying shared-stack build with --no-cache...")
+	return r.runLoggedCommand("rebuilding shared-stack images without cache", stackOutput, r.composeArgs(composeFile, "build", "--no-cache"))
+}
+
+func (r *Runner) stackOutputHasBuildKitCacheFailure() bool {
+	data, err := os.ReadFile(filepath.Join(r.repoRoot, stackOutput))
+	if err != nil {
+		return false
+	}
+	return isBuildKitCacheFailureLog(string(data))
+}
+
+func isBuildKitCacheFailureLog(log string) bool {
+	log = strings.ToLower(log)
+	return strings.Contains(log, "failed to stat active key during commit") ||
+		(strings.Contains(log, "snapshot") && strings.Contains(log, "does not exist"))
 }
 
 func (r *Runner) restartSharedStack(composeFile string, services []string) int {

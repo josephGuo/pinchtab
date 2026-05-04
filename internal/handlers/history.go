@@ -41,9 +41,9 @@ func (h *Handlers) HandleBack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 
@@ -79,9 +79,9 @@ func (h *Handlers) HandleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 
@@ -115,9 +115,9 @@ func (h *Handlers) HandleReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tabID := r.URL.Query().Get("tabId")
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 

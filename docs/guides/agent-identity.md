@@ -38,6 +38,8 @@ pinchtab nav https://example.com
 
 The `X-Agent-Id` header is sent with every request. No server-side setup required — any string works.
 
+When a request has an agent ID but no agent session, PinchTab also keeps that agent's current tab separately from other agents. You can omit `tabId` in a multi-step flow without stealing another agent's current tab.
+
 **When to use:** Multiple agents sharing one server where you want to see who did what, but don't need session management.
 
 **Limitation:** No revocation, no idle tracking, no labels. The agent ID is self-declared — any caller can claim any identity.
@@ -119,6 +121,8 @@ curl -X POST http://localhost:9867/navigate \
 ```
 
 No need to set `--agent-id` — the session carries the agent identity.
+
+Current-tab state is session-scoped. Two sessions for the same `agentId` keep separate current tabs, and session scope takes priority over any `X-Agent-Id` header.
 
 ### Manage Sessions
 

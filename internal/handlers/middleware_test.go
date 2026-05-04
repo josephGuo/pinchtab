@@ -828,6 +828,122 @@ func TestLoggingMiddleware_RecordsFailure(t *testing.T) {
 	}
 }
 
+func TestStripInternalHeadersMiddleware_RemovesPinchtabHeaders(t *testing.T) {
+	var seen http.Header
+	handler := StripInternalHeadersMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Clone()
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("X-PinchTab-Session-Id", "spoofed")
+	req.Header.Set("X-PinchTab-Tab-Id", "tab-spoof")
+	req.Header.Set("x-pinchtab-source", "evil")
+	req.Header.Set("Authorization", "Session abc")
+	req.Header.Set("X-Other", "keep-me")
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	for _, h := range []string{"X-PinchTab-Session-Id", "X-PinchTab-Tab-Id", "X-Pinchtab-Source"} {
+		if seen.Get(h) != "" {
+			t.Fatalf("expected %s to be stripped, got %q", h, seen.Get(h))
+		}
+	}
+	if seen.Get("Authorization") != "Session abc" {
+		t.Fatal("Authorization should be preserved")
+	}
+	if seen.Get("X-Other") != "keep-me" {
+		t.Fatal("non-pinchtab headers should be preserved")
+	}
+}
+
+func TestTrustedInternalProxyStripMiddleware_ValidTokenMarksContextAndPreservesHeaders(t *testing.T) {
+	const secret = "shared-internal-secret"
+	var (
+		seenSession string
+		seenTrusted bool
+		seenToken   string
+	)
+	mw := TrustedInternalProxyStripMiddleware(secret)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenSession = r.Header.Get("X-PinchTab-Session-Id")
+		seenTrusted = IsTrustedInternalProxy(r)
+		seenToken = r.Header.Get(InternalTokenHeader)
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set(InternalTokenHeader, secret)
+	req.Header.Set("X-PinchTab-Session-Id", "ses_propagated")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if !seenTrusted {
+		t.Fatal("expected request to be marked trusted-internal-proxy")
+	}
+	if seenSession != "ses_propagated" {
+		t.Fatalf("session header = %q, want ses_propagated", seenSession)
+	}
+	if seenToken != "" {
+		t.Fatalf("internal token header should be removed, got %q", seenToken)
+	}
+}
+
+func TestTrustedInternalProxyStripMiddleware_BadTokenStripsHeaders(t *testing.T) {
+	var (
+		seenSession string
+		seenTrusted bool
+	)
+	mw := TrustedInternalProxyStripMiddleware("expected-secret")
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenSession = r.Header.Get("X-PinchTab-Session-Id")
+		seenTrusted = IsTrustedInternalProxy(r)
+		w.WriteHeader(200)
+	}))
+
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set(InternalTokenHeader, "wrong-secret")
+	req.Header.Set("X-PinchTab-Session-Id", "spoofed")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if seenTrusted {
+		t.Fatal("expected untrusted request not to be marked")
+	}
+	if seenSession != "" {
+		t.Fatalf("session header should be stripped, got %q", seenSession)
+	}
+}
+
+func TestTrustedInternalProxyStripMiddleware_EmptySecretAlwaysStrips(t *testing.T) {
+	var (
+		seenSession string
+		seenTrusted bool
+	)
+	mw := TrustedInternalProxyStripMiddleware("")
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenSession = r.Header.Get("X-PinchTab-Session-Id")
+		seenTrusted = IsTrustedInternalProxy(r)
+		w.WriteHeader(200)
+	}))
+
+	// Even when the request looks like it has the right header, an empty
+	// configured secret means trust verification is disabled — always strip.
+	req := httptest.NewRequest("GET", "/x", nil)
+	req.Header.Set(InternalTokenHeader, "anything")
+	req.Header.Set("X-PinchTab-Session-Id", "spoofed")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if seenTrusted {
+		t.Fatal("empty secret must never mark trusted")
+	}
+	if seenSession != "" {
+		t.Fatal("empty secret must still strip pinchtab headers")
+	}
+}
+
 func TestRequestIDMiddleware_SetsHeader(t *testing.T) {
 	handler := RequestIDMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

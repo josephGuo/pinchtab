@@ -7,7 +7,7 @@ source "${GROUP_DIR}/../../helpers/cli.sh"
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab session create"
 
-pt_ok session create --agent-id "e2e-agent" --label "e2e-test"
+pt_ok session create --agent-id "e2e-agent" --label "e2e-test" --json
 assert_output_contains "sessionToken" "output contains sessionToken"
 assert_output_contains "e2e-agent" "output contains agentId"
 assert_output_contains "active" "output contains status active"

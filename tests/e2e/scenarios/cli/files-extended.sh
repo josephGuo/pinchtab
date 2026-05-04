@@ -24,6 +24,7 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab screenshot -q 10"
 
+pt_ok nav "${FIXTURES_URL}/index.html"
 pt_ok screenshot -q 10 -o /tmp/e2e-lowq.jpg
 rm -f /tmp/e2e-lowq.jpg
 

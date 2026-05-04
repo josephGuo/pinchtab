@@ -22,19 +22,25 @@ import (
 )
 
 type Handlers struct {
-	Bridge       bridge.BridgeAPI
-	Config       *config.RuntimeConfig
-	Profiles     bridge.ProfileService
-	Dashboard    *dashboard.Dashboard
-	Orchestrator bridge.OrchestratorService
-	IdMgr        *ids.Manager
-	Matcher      semantic.ElementMatcher
-	IntentCache  *recovery.IntentCache
-	Recovery     *recovery.RecoveryEngine
-	Router       *engine.Router // optional; nil ⇒ chrome-only
-	IDPIGuard    idpi.Guard
-	Version      string // build version injected at startup
-	clipboard    clipboardStore
+	Bridge          bridge.BridgeAPI
+	Config          *config.RuntimeConfig
+	Profiles        bridge.ProfileService
+	Dashboard       *dashboard.Dashboard
+	Orchestrator    bridge.OrchestratorService
+	IdMgr           *ids.Manager
+	Matcher         semantic.ElementMatcher
+	IntentCache     *recovery.IntentCache
+	Recovery        *recovery.RecoveryEngine
+	Router          *engine.Router // optional; nil ⇒ chrome-only
+	IDPIGuard       idpi.Guard
+	CurrentTabs     *CurrentTabStore
+	Version         string // build version injected at startup
+	clipboard       clipboardStore
+	credentialStore *credentialStore
+
+	// emptyPointerPolicy controls behavior when an identified caller omits
+	// tabId and has no stored scoped current tab. See EmptyPointerPolicy.
+	emptyPointerPolicy EmptyPointerPolicy
 
 	// Optional dependency injection (for unit testing)
 	evalJS           func(ctx context.Context, expression string, out *string) error
@@ -47,15 +53,17 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	intentCache := recovery.NewIntentCache(200, 10*time.Minute)
 
 	h := &Handlers{
-		Bridge:       b,
-		Config:       cfg,
-		Profiles:     p,
-		Dashboard:    d,
-		Orchestrator: o,
-		IdMgr:        ids.NewManager(),
-		Matcher:      matcher,
-		IntentCache:  intentCache,
-		IDPIGuard:    idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains),
+		Bridge:          b,
+		Config:          cfg,
+		Profiles:        p,
+		Dashboard:       d,
+		Orchestrator:    o,
+		IdMgr:           ids.NewManager(),
+		Matcher:         matcher,
+		IntentCache:     intentCache,
+		IDPIGuard:       idpi.NewGuard(cfg.IDPI, cfg.AllowedDomains),
+		CurrentTabs:     NewCurrentTabStore(),
+		credentialStore: newCredentialStore(),
 	}
 
 	// Wire up the recovery engine with callbacks that delegate back to
@@ -98,6 +106,27 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 	go CleanupStaleTmpExports(cfg.StateDir)
 
 	return h
+}
+
+// SetEmptyPointerPolicy configures behavior when an identified caller
+// omits tabId and has no stored scoped current tab. Default is lazy.
+func (h *Handlers) SetEmptyPointerPolicy(p EmptyPointerPolicy) {
+	if h == nil {
+		return
+	}
+	if p == "" {
+		p = EmptyPointerLazy
+	}
+	h.emptyPointerPolicy = p
+}
+
+// EmptyPointerPolicy returns the active empty-pointer policy. Defaults to
+// lazy when not configured.
+func (h *Handlers) EmptyPointerPolicy() EmptyPointerPolicy {
+	if h == nil || h.emptyPointerPolicy == "" {
+		return EmptyPointerLazy
+	}
+	return h.emptyPointerPolicy
 }
 
 type restartStatusProvider interface {
@@ -198,6 +227,9 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /tabs/{id}/url", h.HandleTabURL)
 	mux.HandleFunc("GET /tabs/{id}/html", h.HandleTabHTML)
 	mux.HandleFunc("GET /tabs/{id}/styles", h.HandleTabStyles)
+	mux.HandleFunc("GET /tabs/{id}/value", h.HandleTabGetValue)
+	mux.HandleFunc("GET /tabs/{id}/attr", h.HandleTabGetAttr)
+	mux.HandleFunc("GET /tabs/{id}/count", h.HandleTabCount)
 	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
@@ -213,6 +245,17 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /url", h.HandleURL)
 	mux.HandleFunc("GET /html", h.HandleHTML)
 	mux.HandleFunc("GET /styles", h.HandleStyles)
+	mux.HandleFunc("GET /value", h.HandleGetValue)
+	mux.HandleFunc("GET /attr", h.HandleGetAttr)
+	mux.HandleFunc("GET /count", h.HandleCount)
+	mux.HandleFunc("GET /box", h.HandleGetBox)
+	mux.HandleFunc("GET /tabs/{id}/box", h.HandleTabGetBox)
+	mux.HandleFunc("GET /visible", h.HandleGetVisible)
+	mux.HandleFunc("GET /tabs/{id}/visible", h.HandleTabGetVisible)
+	mux.HandleFunc("GET /enabled", h.HandleGetEnabled)
+	mux.HandleFunc("GET /tabs/{id}/enabled", h.HandleTabGetEnabled)
+	mux.HandleFunc("GET /checked", h.HandleGetChecked)
+	mux.HandleFunc("GET /tabs/{id}/checked", h.HandleTabGetChecked)
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)
 	mux.HandleFunc("GET /help", h.HandleOpenAPI) // alias
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
@@ -234,8 +277,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/unlock", h.HandleTabUnlockByID)
 	mux.HandleFunc("GET /tabs/{id}/cookies", h.HandleTabGetCookies)
 	mux.HandleFunc("POST /tabs/{id}/cookies", h.HandleTabSetCookies)
+	mux.HandleFunc("DELETE /tabs/{id}/cookies", h.HandleTabClearCookies)
 	mux.HandleFunc("GET /cookies", h.HandleGetCookies)
 	mux.HandleFunc("POST /cookies", h.HandleSetCookies)
+	mux.HandleFunc("DELETE /cookies", h.HandleClearCookies)
 	mux.HandleFunc("GET /solvers", h.HandleListSolvers)
 	mux.HandleFunc("GET /config/autosolver", h.HandleAutoSolverConfig)
 	mux.HandleFunc("POST /solve", h.HandleSolve)
@@ -283,6 +328,19 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /console/clear", h.HandleClearConsoleLogs)
 	mux.HandleFunc("GET /errors", h.HandleGetErrorLogs)
 	mux.HandleFunc("POST /errors/clear", h.HandleClearErrorLogs)
+	mux.HandleFunc("POST /emulation/viewport", h.HandleSetViewport)
+	mux.HandleFunc("POST /tabs/{id}/emulation/viewport", h.HandleTabSetViewport)
+	mux.HandleFunc("POST /emulation/geolocation", h.HandleSetGeolocation)
+	mux.HandleFunc("POST /tabs/{id}/emulation/geolocation", h.HandleTabSetGeolocation)
+	mux.HandleFunc("POST /emulation/offline", h.HandleSetOffline)
+	mux.HandleFunc("POST /tabs/{id}/emulation/offline", h.HandleTabSetOffline)
+	mux.HandleFunc("POST /emulation/headers", h.HandleSetHeaders)
+	mux.HandleFunc("POST /tabs/{id}/emulation/headers", h.HandleTabSetHeaders)
+	mux.HandleFunc("POST /emulation/credentials", h.HandleSetCredentials)
+	mux.HandleFunc("POST /tabs/{id}/emulation/credentials", h.HandleTabSetCredentials)
+	mux.HandleFunc("POST /emulation/media", h.HandleSetMedia)
+	mux.HandleFunc("POST /tabs/{id}/emulation/media", h.HandleTabSetMedia)
+
 	mux.HandleFunc("POST /cache/clear", h.HandleCacheClear)
 	mux.HandleFunc("GET /cache/status", h.HandleCacheStatus)
 

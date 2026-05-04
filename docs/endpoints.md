@@ -90,9 +90,11 @@ Navigation request fields:
 
 Important behavior:
 
-- `POST /navigate` creates a new tab when `tabId` is omitted
+- `POST /navigate` creates a new tab when `tabId` is omitted for anonymous callers
+- session-authenticated callers keep a current tab per session; omitted `tabId` reuses that session's current tab when one exists, otherwise creates one
+- bearer-token callers with `X-Agent-Id` keep a current tab per agent ID when no session is present
 - `POST /tab` supports `new` and `focus`
-- `POST /close` closes the `tabId` supplied in the JSON body, or the current/default tab when `tabId` is omitted
+- `POST /close` closes the `tabId` supplied in the JSON body, or the caller's current/default tab when `tabId` is omitted
 
 ## Handoff And Manual Intervention
 

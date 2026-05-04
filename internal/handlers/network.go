@@ -48,7 +48,7 @@ func (h *Handlers) HandleNetwork(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
@@ -127,7 +127,7 @@ func (h *Handlers) HandleNetworkByID(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {
@@ -188,9 +188,9 @@ func (h *Handlers) HandleNetworkClear(w http.ResponseWriter, r *http.Request) {
 
 	tabID := r.URL.Query().Get("tabId")
 	if tabID != "" {
-		_, resolvedTabID, err := h.Bridge.TabContext(tabID)
+		_, resolvedTabID, err := h.tabContext(r, tabID)
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		nm.ClearTab(resolvedTabID)
@@ -236,7 +236,7 @@ func (h *Handlers) HandleNetworkStream(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {

@@ -16,6 +16,7 @@ type RuntimeConfig struct {
 	StateDir          string
 	TrustProxyHeaders bool  // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy
 	CookieSecure      *bool // Nil = auto-detect based on request scheme/host for backward compatibility
+	VerboseStartup    bool  // Show full banner and slog output on server start
 
 	// Security settings
 	AllowEvaluate         bool
@@ -285,6 +286,7 @@ type BrowserConfig struct {
 
 type InstanceDefaultsConfig struct {
 	Mode              string             `json:"mode,omitempty"`
+	Headless          *bool              `json:"headless,omitempty"`
 	NoRestore         *bool              `json:"noRestore,omitempty"`
 	Timezone          string             `json:"timezone,omitempty"`
 	BlockImages       *bool              `json:"blockImages,omitempty"`

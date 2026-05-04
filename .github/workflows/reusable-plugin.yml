@@ -24,6 +24,10 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install plugin dependencies
+        working-directory: plugin
+        run: npm install --ignore-scripts --no-package-lock
+
       - name: Verify JSON schemas
         working-directory: plugin
         run: |
@@ -31,11 +35,18 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('openclaw.plugin.json', 'utf8'))"
           echo "✅ All JSON files are valid"
 
+      - name: Verify OpenClaw plugin API types
+        working-directory: plugin
+        run: npm run typecheck
+
       - name: Verify package contents
         working-directory: plugin
         run: |
           echo "📦 Package will contain:"
           npm pack --dry-run 2>&1 | grep -E "^npm notice [0-9]" | awk '{print "  " $4 " (" $3 ")"}'
+
+      - name: Verify ClawHub package metadata
+        run: npx --yes clawhub@latest package publish ./plugin --family code-plugin --dry-run --json
 
   test:
     name: Test Plugin
@@ -49,6 +60,10 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install plugin dependencies
+        working-directory: plugin
+        run: npm install --ignore-scripts --no-package-lock
+
       - name: Run tests
         working-directory: plugin
-        run: npx tsx --test *.test.ts
+        run: npm test

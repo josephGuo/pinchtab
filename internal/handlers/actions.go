@@ -158,7 +158,7 @@ func (h *Handlers) HandleAction(w http.ResponseWriter, r *http.Request) {
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		if req.TabID == "" {
@@ -442,7 +442,7 @@ func (h *Handlers) handleActionsBatch(w http.ResponseWriter, r *http.Request, re
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		if err := h.enforceTabLease(resolvedTabID, owner); err != nil {
@@ -679,7 +679,7 @@ func (h *Handlers) HandleMacro(w http.ResponseWriter, r *http.Request) {
 		var err error
 		ctx, resolvedTabID, err = h.tabContext(r, req.TabID)
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		if err := h.enforceTabLease(resolvedTabID, owner); err != nil {

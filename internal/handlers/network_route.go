@@ -117,7 +117,7 @@ func (h *Handlers) requireRouteContext(w http.ResponseWriter, r *http.Request, t
 	}
 	ctx, id, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return nil, "", false
 	}
 	return ctx, id, true
@@ -209,7 +209,7 @@ func (h *Handlers) handleNetworkUnrouteFor(w http.ResponseWriter, r *http.Reques
 	removed, err := h.Bridge.RemoveRouteRule(resolvedID, pattern)
 	if err != nil {
 		if errors.Is(err, bridge.ErrTabNotRouted) {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		httpx.Error(w, 500, err)

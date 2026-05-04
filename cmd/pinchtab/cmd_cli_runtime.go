@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
+	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/pinchtab/pinchtab/internal/config"
 	"github.com/spf13/cobra"
 )
@@ -59,20 +60,41 @@ func newCLIHTTPClient(agentID string) *http.Client {
 }
 
 func resolveCLIBase(cfg *config.RuntimeConfig) string {
-	if serverURL != "" {
-		return strings.TrimRight(serverURL, "/")
+	defaultBase := resolveDefaultCLIBase(cfg)
+	resolved := resolveBaseURL(defaultBase)
+	if resolved == defaultBase {
+		if serverURL != "" {
+			output.Hint("--server " + resolved + " is the default and can be omitted")
+		} else if os.Getenv("PINCHTAB_SERVER") != "" {
+			output.Hint("PINCHTAB_SERVER=" + resolved + " is the default and can be omitted")
+		}
 	}
-	if envURL := os.Getenv("PINCHTAB_SERVER"); envURL != "" {
-		return strings.TrimRight(envURL, "/")
-	}
-	// Default to the main server port so requests go through the
-	// orchestrator. This ensures activity is recorded in the shared
-	// store and visible in the dashboard.
-	return resolveDefaultCLIBase(cfg)
+	return resolved
 }
 
 func resolveDefaultCLIBase(cfg *config.RuntimeConfig) string {
 	return fmt.Sprintf("http://127.0.0.1:%s", cfg.Port)
+}
+
+// resolveBaseURL returns the server base URL from flag/env/default.
+// Shared by both the full CLI runtime path and the lightweight tab probe.
+func resolveBaseURL(defaultBase string) string {
+	if serverURL != "" {
+		return strings.TrimRight(serverURL, "/")
+	}
+	if u := os.Getenv("PINCHTAB_SERVER"); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return defaultBase
+}
+
+// resolveToken returns the auth token from env vars (session takes precedence).
+// Shared by both the full CLI runtime path and the lightweight tab probe.
+func resolveToken() string {
+	if s := os.Getenv("PINCHTAB_SESSION"); s != "" {
+		return s
+	}
+	return os.Getenv("PINCHTAB_TOKEN")
 }
 
 func canAutoStartServerForCLI(cfg *config.RuntimeConfig, baseURL string) bool {
@@ -83,14 +105,10 @@ func canAutoStartServerForCLI(cfg *config.RuntimeConfig, baseURL string) bool {
 }
 
 func resolveCLIToken(cfg *config.RuntimeConfig) string {
-	if sessionToken := os.Getenv("PINCHTAB_SESSION"); sessionToken != "" {
-		return sessionToken
+	if t := resolveToken(); t != "" {
+		return t
 	}
-	token := cfg.Token
-	if envToken := os.Getenv("PINCHTAB_TOKEN"); envToken != "" {
-		token = envToken
-	}
-	return token
+	return cfg.Token
 }
 
 func resolveCLIAgentID() string {

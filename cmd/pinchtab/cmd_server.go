@@ -33,6 +33,8 @@ var serverCmd = &cobra.Command{
 		if exts, _ := cmd.Flags().GetStringArray("extension"); len(exts) > 0 {
 			cfg.ExtensionPaths = append(cfg.ExtensionPaths, exts...)
 		}
+		verbose, _ := cmd.Flags().GetBool("verbose")
+		cfg.VerboseStartup = verbose
 		server.RunDashboard(cfg, version)
 	},
 }
@@ -42,5 +44,6 @@ func init() {
 	serverCmd.Flags().StringArrayP("extension", "e", nil, "Load browser extension (repeatable)")
 	serverCmd.Flags().BoolP("headed", "H", false, "Start default instance in headed mode")
 	serverCmd.Flags().BoolP("yolo", "y", false, "Apply guards down preset (enables evaluate, macro, download)")
+	serverCmd.Flags().BoolP("verbose", "v", false, "Show full startup banner and logs")
 	rootCmd.AddCommand(serverCmd)
 }

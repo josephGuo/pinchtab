@@ -164,6 +164,7 @@ jobs:
     uses: ./.github/workflows/reusable-publish-skill.yml
     with:
       version: ${{ inputs.tag }}
+      ref: ${{ inputs.ref }}
     secrets:
       CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
 
@@ -175,5 +176,7 @@ jobs:
     uses: ./.github/workflows/reusable-publish-plugin.yml
     with:
       version: ${{ inputs.tag }}
+      ref: ${{ inputs.ref }}
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}

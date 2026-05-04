@@ -85,6 +85,17 @@ func DoPostQuiet(client *http.Client, base, token, path string, body map[string]
 	return DoPostQuietWithHeaders(client, base, token, path, body, nil)
 }
 
+// DoPostRaw sends a POST and returns the raw response body without printing.
+// Exits on HTTP errors.
+func DoPostRaw(client *http.Client, base, token, path string, body map[string]any) []byte {
+	statusCode, respBody, _ := doPostQuietWithStatus(client, base, token, path, body, nil)
+	if statusCode >= 400 {
+		handleAPIError(statusCode, respBody)
+		os.Exit(1)
+	}
+	return respBody
+}
+
 func DoPostQuietWithStatus(client *http.Client, base, token, path string, body map[string]any) (int, []byte, map[string]any) {
 	return doPostQuietWithStatus(client, base, token, path, body, nil)
 }

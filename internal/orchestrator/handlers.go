@@ -128,7 +128,8 @@ func (o *Orchestrator) handleList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (o *Orchestrator) handleAllTabs(w http.ResponseWriter, r *http.Request) {
-	httpx.JSON(w, 200, o.AllTabs())
+	fresh := r.URL.Query().Get("fresh") == "1"
+	httpx.JSON(w, 200, o.allTabs(fresh))
 }
 
 func (o *Orchestrator) handleAllMetrics(w http.ResponseWriter, r *http.Request) {

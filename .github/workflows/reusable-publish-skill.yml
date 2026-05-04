@@ -6,6 +6,10 @@ on:
       version:
         required: true
         type: string
+      ref:
+        required: false
+        type: string
+        default: ''
     secrets:
       CLAWHUB_TOKEN:
         required: true
@@ -14,6 +18,10 @@ on:
       version:
         description: 'Skill version (e.g. 0.2.0, without v prefix)'
         required: true
+      ref:
+        description: 'Git ref to publish from. Defaults to the workflow ref.'
+        required: false
+        default: ''
 
 
 permissions:
@@ -25,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v6
         with:

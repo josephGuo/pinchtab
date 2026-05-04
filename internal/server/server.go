@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,6 +37,10 @@ import (
 )
 
 func RunDashboard(cfg *config.RuntimeConfig, version string) {
+	if !cfg.VerboseStartup {
+		slog.SetDefault(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}
+
 	// Clean up orphaned Chrome processes from previous crashed runs
 	bridge.CleanupOrphanedChromeProcesses(cfg.ProfileDir)
 
@@ -88,6 +93,25 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 			Instance: evt.Instance,
 		})
 	})
+
+	// Print machine-readable READY line when first instance starts.
+	readyOnce := &sync.Once{}
+	orch.OnEvent(func(evt orchestrator.InstanceEvent) {
+		if evt.Type == "instance.started" && evt.Instance != nil {
+			readyOnce.Do(func() {
+				if dashPort != "9867" {
+					fmt.Printf("READY port=%s\n", dashPort)
+				} else {
+					fmt.Println("READY")
+				}
+				fmt.Println("HINT: export PINCHTAB_SESSION=$(pinchtab session create --agent-id myagent) && pinchtab nav https://pinchtab.com --snap")
+			})
+		}
+	})
+
+	// Drop identity → instance bindings and the instance's scoped current
+	// tab when a session is revoked, expires, or is pruned.
+	sessionStore.OnLifecycle(orch.SessionLifecycleHook())
 	actStore, err := activity.NewRecorder(activity.Config{
 		Enabled:       cfg.Observability.Activity.Enabled,
 		RetentionDays: cfg.Observability.Activity.RetentionDays,
@@ -125,23 +149,56 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 
 	syncCtx, syncCancel := context.WithCancel(context.Background())
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
+		const (
+			minInterval = 1 * time.Second
+			maxInterval = 10 * time.Second
+		)
+		interval := minInterval
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
+
+		// Use tail reader for O(new lines) polling instead of full-file rescan.
+		type tailProvider interface {
+			NewTailReader(source string) *activity.TailReader
+		}
+		var tailReader *activity.TailReader
+		if tp, ok := actStore.(tailProvider); ok {
+			tailReader = tp.NewTailReader("client")
+		}
 
 		lastSync := time.Now().UTC()
 		for {
 			select {
 			case <-syncCtx.Done():
 				return
-			case <-ticker.C:
-				nextSync, err := dash.IngestPersistedAgentActivity(actStore, lastSync)
+			case <-timer.C:
+				var hasNew bool
+				var err error
+
+				if tailReader != nil {
+					var n int
+					n, err = dash.IngestTail(tailReader)
+					hasNew = n > 0
+				} else {
+					var nextSync time.Time
+					nextSync, err = dash.IngestPersistedAgentActivity(actStore, lastSync)
+					if !nextSync.IsZero() && nextSync.After(lastSync) {
+						lastSync = nextSync
+						hasNew = true
+					}
+				}
+
 				if err != nil {
 					slog.Warn("sync dashboard agent activity", "err", err)
+					timer.Reset(interval)
 					continue
 				}
-				if !nextSync.IsZero() {
-					lastSync = nextSync
+				if hasNew {
+					interval = minInterval
+				} else {
+					interval = min(interval*2, maxInterval)
 				}
+				timer.Reset(interval)
 			}
 		}
 	}()
@@ -178,14 +235,16 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		listenStatus = "running"
 	}
 
-	cli.PrintStartupBanner(cfg, cli.StartupBannerOptions{
-		Mode:         "server",
-		ListenAddr:   cfg.Bind + ":" + dashPort,
-		ListenStatus: listenStatus,
-		PublicURL:    fmt.Sprintf("http://localhost:%s", dashPort),
-		Strategy:     stratName,
-		Allocation:   allocPolicy,
-	})
+	if cfg.VerboseStartup {
+		cli.PrintStartupBanner(cfg, cli.StartupBannerOptions{
+			Mode:         "server",
+			ListenAddr:   cfg.Bind + ":" + dashPort,
+			ListenStatus: listenStatus,
+			PublicURL:    fmt.Sprintf("http://localhost:%s", dashPort),
+			Strategy:     stratName,
+			Allocation:   allocPolicy,
+		})
+	}
 
 	if listenStatus == "running" {
 		fmt.Println(cli.StyleStdout(cli.WarningStyle, fmt.Sprintf("  pinchtab already running as a daemon on port %s", dashPort)))
@@ -225,22 +284,25 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 		resolver := &scheduler.ManagerResolver{Mgr: orch.InstanceManager()}
 		sched = scheduler.New(schedCfg, resolver)
 		sched.RegisterHandlers(mux)
-		sched.Start()
-		slog.Info("scheduler enabled", "strategy", schedCfg.Strategy, "workers", schedCfg.WorkerCount)
+		slog.Info("scheduler enabled (on-demand)", "strategy", schedCfg.Strategy, "workers", schedCfg.WorkerCount)
 	}
 
 	mux.HandleFunc("GET /health", configAPI.HandleHealth)
 
-	handler := handlers.RequestIDMiddleware(
-		activity.Middleware(
-			liveActivity,
-			"server",
-			handlers.SecurityHeadersMiddleware(cfg,
-				handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, sessionStore, mux)))),
+	handler := handlers.StripInternalHeadersMiddleware(
+		handlers.RequestIDMiddleware(
+			activity.Middleware(
+				liveActivity,
+				"server",
+				handlers.SecurityHeadersMiddleware(cfg,
+					handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.CorsMiddleware(cfg, handlers.AuthMiddlewareWithSessions(cfg, sessions, sessionStore, mux)))),
+				),
 			),
 		),
 	)
-	cli.LogSecurityWarnings(cfg)
+	if cfg.VerboseStartup {
+		cli.LogSecurityWarnings(cfg)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Bind + ":" + dashPort,
@@ -255,6 +317,9 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 	if err := activeStrategy.Start(context.Background()); err != nil {
 		slog.Error("strategy start failed", "strategy", activeStrategy.Name(), "err", err)
 	}
+
+	maintenanceCtx, maintenanceCancel := context.WithCancel(context.Background())
+	go orch.RunMaintenance(maintenanceCtx)
 
 	shutdownOnce := &sync.Once{}
 	doShutdown := func() {
@@ -271,6 +336,7 @@ func RunDashboard(cfg *config.RuntimeConfig, version string) {
 				sched.Stop()
 			}
 			syncCancel()
+			maintenanceCancel()
 			dash.Shutdown()
 			orch.Shutdown()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

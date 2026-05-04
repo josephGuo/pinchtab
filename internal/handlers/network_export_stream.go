@@ -47,7 +47,7 @@ func (h *Handlers) HandleNetworkExportStream(w http.ResponseWriter, r *http.Requ
 	tabID := r.URL.Query().Get("tabId")
 	tabCtx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, tabCtx, resolvedTabID); !ok {

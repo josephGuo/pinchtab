@@ -220,6 +220,10 @@
           ],
           "default": "headless"
         },
+        "headless": {
+          "$ref": "#/definitions/nullableBoolean",
+          "description": "Shorthand for mode. true = headless, false = headed. Ignored when mode is also set."
+        },
         "noRestore": {
           "$ref": "#/definitions/nullableBoolean"
         },

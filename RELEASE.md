@@ -8,7 +8,7 @@ Pinchtab uses an automated CI/CD pipeline triggered by Git tags. When you push a
 2. **Creates GitHub release** — with checksums.txt for integrity verification
 3. **Publishes to npm** — TypeScript SDK with auto-download postinstall script
 4. **Builds Docker images** — linux/amd64, linux/arm64
-5. **Publishes the ClawHub skill** — after npm succeeds
+5. **Publishes ClawHub packages** — the skill and OpenClaw plugin publish in parallel after npm succeeds
 
 ## Prerequisites
 
@@ -22,6 +22,7 @@ Go to **Settings → Secrets and variables → Actions** and add:
 
 - **DOCKERHUB_USER** — Docker Hub username (if using Docker Hub)
 - **DOCKERHUB_TOKEN** — Docker Hub personal access token
+- **CLAWHUB_TOKEN** — ClawHub authentication token for publishing the skill and OpenClaw plugin
 
 ### Local setup
 
@@ -82,6 +83,7 @@ grep -A 2 "^release:" .goreleaser.yml
    - Go checks
    - dashboard checks
    - npm package verification
+   - OpenClaw plugin verification
    - docs verification
    - full release E2E
    - Docker bootstrap smoke test
@@ -94,6 +96,7 @@ grep -A 2 "^release:" .goreleaser.yml
    - npm publish
    - Docker image publish
    - ClawHub skill publish
+   - ClawHub plugin publish
 
 ### Required GitHub setup
 
@@ -156,13 +159,14 @@ Depends on: `release` and `npm`
 GitHub Actions builds the release image directly from the tagged source with `docker buildx`.
 The workflow pushes the same multi-arch build to both GHCR and Docker Hub, but only after npm has already published successfully.
 
-### 4. ClawHub skill
+### 4. ClawHub packages
 
 Depends on: `release` and `npm`
 
-The main `Release` workflow publishes the Pinchtab skill to ClawHub automatically after npm succeeds.
-It does not consume npm artifacts or GitHub release binaries directly; the ordering is a policy choice so npm stays the first irreversible publish step.
-The standalone `Publish Skill` workflow remains available for retries or one-off recovery publishes.
+The main `Release` workflow publishes the Pinchtab skill and OpenClaw plugin to ClawHub automatically after npm succeeds.
+They run as separate jobs at the same dependency level, so the plugin publish happens in parallel with the skill publish.
+Neither ClawHub publish consumes npm artifacts or GitHub release binaries directly; the ordering is a policy choice so npm stays the first irreversible publish step.
+The standalone publish workflows remain available for retries or one-off recovery publishes.
 
 ## Troubleshooting
 

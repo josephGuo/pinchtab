@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -16,17 +15,17 @@ const maxLogLimit = 1000
 func (h *Handlers) resolveConsoleTab(w http.ResponseWriter, r *http.Request) (context.Context, string, bool) {
 	tabID := r.URL.Query().Get("tabId")
 	if tabID == "" {
-		ctx, resolvedID, err := h.Bridge.TabContext("")
+		ctx, resolvedID, err := h.tabContext(r, "")
 		if err != nil {
-			httpx.Error(w, http.StatusBadRequest, err)
+			WriteTabContextError(w, err, http.StatusBadRequest)
 			return nil, "", false
 		}
 		return ctx, resolvedID, true
 	}
 
-	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	ctx, resolvedID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
+		WriteTabContextError(w, err, http.StatusNotFound)
 		return nil, "", false
 	}
 	return ctx, resolvedID, true

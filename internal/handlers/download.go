@@ -57,7 +57,7 @@ func (h *Handlers) HandleDownload(w http.ResponseWriter, r *http.Request) {
 	if tabID != "" {
 		ctx, resolvedTabID, err := h.tabContext(r, tabID)
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		owner := resolveOwner(r, "")
@@ -373,8 +373,8 @@ func (h *Handlers) HandleTabDownload(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, 400, fmt.Errorf("tab id required"))
 		return
 	}
-	if _, _, err := h.Bridge.TabContext(tabID); err != nil {
-		httpx.Error(w, 404, err)
+	if _, _, err := h.tabContext(r, tabID); err != nil {
+		WriteTabContextError(w, err, 404)
 		return
 	}
 

@@ -36,9 +36,9 @@ func (h *Handlers) HandleDialog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, resolvedID, err := h.Bridge.TabContext(req.TabID)
+	ctx, resolvedID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 

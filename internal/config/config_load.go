@@ -1,7 +1,9 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -141,7 +143,14 @@ func Load() *RuntimeConfig {
 	finalizeProfileConfig(cfg)
 
 	// Load config file (supports both legacy flat and new nested format)
-	configPath := envOr("PINCHTAB_CONFIG", filepath.Join(userConfigDir(), "config.json"))
+	defaultConfigPath := filepath.Join(userConfigDir(), "config.json")
+	configPath := envOr("PINCHTAB_CONFIG", defaultConfigPath)
+
+	if configPath != defaultConfigPath {
+		if _, statErr := os.Stat(defaultConfigPath); statErr == nil {
+			fmt.Fprintf(os.Stderr, "HINT: default config exists at %s — you can edit it directly instead of using PINCHTAB_CONFIG\n", defaultConfigPath)
+		}
+	}
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -168,6 +177,12 @@ func Load() *RuntimeConfig {
 		if err := json.Unmarshal(data, fc); err != nil {
 			slog.Warn("failed to parse config", "path", configPath, "error", err)
 			return cfg
+		}
+		// Warn about unrecognized fields (non-fatal, config still loads).
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.DisallowUnknownFields()
+		if ufErr := dec.Decode(&FileConfig{}); ufErr != nil {
+			slog.Warn("config has unrecognized fields that will be ignored", "path", configPath, "error", ufErr)
 		}
 	}
 
@@ -373,7 +388,14 @@ func applyFileConfig(cfg *RuntimeConfig, fc *FileConfig) {
 		cfg.ExtensionPaths = append([]string(nil), fc.Browser.ExtensionPaths...)
 	}
 
-	// Instance defaults
+	// Instance defaults — resolve headless bool into mode string.
+	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode == "" {
+		if *fc.InstanceDefaults.Headless {
+			fc.InstanceDefaults.Mode = "headless"
+		} else {
+			fc.InstanceDefaults.Mode = "headed"
+		}
+	}
 	if fc.InstanceDefaults.Mode != "" {
 		cfg.Headless = modeToHeadless(fc.InstanceDefaults.Mode, cfg.Headless)
 		cfg.HeadlessSet = true

@@ -97,6 +97,8 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 		var curURL, title string
 		_ = chromedp.Run(ctx, chromedp.Location(&curURL), chromedp.Title(&title))
 
+		h.setCurrentTabForRequest(r, newTabID)
+		h.recordActivity(r, activity.Update{Action: "tab.new", TabID: newTabID, URL: curURL})
 		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": curURL, "title": title})
 
 	case "focus":
@@ -108,10 +110,11 @@ func (h *Handlers) HandleTab(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.Bridge.FocusTab(req.TabID); err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 
+		h.setCurrentTabForRequest(r, req.TabID)
 		h.recordActivity(r, activity.Update{Action: "tab.focus", TabID: req.TabID})
 
 		httpx.JSON(w, 200, map[string]any{"focused": true, "tabId": req.TabID})
@@ -169,7 +172,7 @@ func (h *Handlers) closeTab(w http.ResponseWriter, r *http.Request, tabID string
 	if tabID == "" {
 		_, resolvedTabID, err := h.tabContext(r, "")
 		if err != nil {
-			httpx.Error(w, 404, err)
+			WriteTabContextError(w, err, 404)
 			return
 		}
 		tabID = resolvedTabID
@@ -180,6 +183,7 @@ func (h *Handlers) closeTab(w http.ResponseWriter, r *http.Request, tabID string
 		return
 	}
 
+	h.clearCurrentTabReferences(tabID)
 	h.recordActivity(r, activity.Update{Action: "tab.close", TabID: tabID})
 	w.Header().Set(activity.HeaderPTTabID, tabID)
 

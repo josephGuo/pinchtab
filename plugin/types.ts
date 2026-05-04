@@ -1,3 +1,5 @@
+import type { AnyAgentTool, OpenClawPluginApi } from "openclaw/plugin-sdk";
+
 export interface PluginConfig {
   baseUrl?: string;
   token?: string;
@@ -22,10 +24,8 @@ export interface PluginConfig {
   profiles?: Record<string, { instanceId?: string; attach?: boolean }>;
 }
 
-export interface PluginApi {
-  config: { plugins?: { entries?: Record<string, { config?: PluginConfig }> } };
-  registerTool: (tool: any, opts?: { optional?: boolean }) => void;
-}
+export type PluginApi = OpenClawPluginApi;
+export type PluginTool = AnyAgentTool;
 
 export interface ToolResult {
   content: Array<

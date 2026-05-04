@@ -101,7 +101,7 @@ func (h *Handlers) HandleTabHandoff(w http.ResponseWriter, r *http.Request) {
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	owner := resolveOwner(r, "")
@@ -161,7 +161,7 @@ func (h *Handlers) HandleTabResume(w http.ResponseWriter, r *http.Request) {
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	owner := resolveOwner(r, "")
@@ -213,7 +213,7 @@ func (h *Handlers) HandleTabHandoffStatus(w http.ResponseWriter, r *http.Request
 
 	_, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 

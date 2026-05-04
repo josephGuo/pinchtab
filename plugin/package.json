@@ -1,13 +1,21 @@
 {
   "name": "@pinchtab/pinchtab",
   "version": "0.3.0",
-  "description": "OpenClaw plugin for Pinchtab browser control",
+  "description": "OpenClaw plugin for PinchTab browser control",
   "type": "module",
   "scripts": {
-    "test": "npx tsx --test *.test.ts"
+    "test": "tsx --test *.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm test"
   },
   "openclaw": {
-    "extensions": ["./index.ts"]
+    "extensions": ["./index.ts"],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.4.27"
+    }
   },
   "files": [
     "index.ts",
@@ -18,5 +26,11 @@
     "tools/",
     "openclaw.plugin.json"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "openclaw": "2026.4.27",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
 }

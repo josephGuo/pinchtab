@@ -34,7 +34,10 @@ PINCHTAB_TOKEN=...
 ```
 
 For multi-step flows on the same tab, run `pinchtab nav URL` once and then use
-unscoped commands. PinchTab remembers the current tab in its state file. Use
+unscoped commands. Anonymous CLI calls remember the current tab in a shared
+local state file. Identified callers use server-side current-tab state instead:
+agent sessions scope the current tab by session, and `--agent-id` /
+`PINCHTAB_AGENT_ID` scope it by agent ID when no session is present. Use
 `--tab <id>` only when you need to target a specific tab explicitly.
 
 Or use agent sessions for per-agent identity and revocability:

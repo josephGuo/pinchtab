@@ -168,6 +168,21 @@ func AuthMiddlewareWithSessions(cfg *config.RuntimeConfig, sessions *browsersess
 	})
 }
 
+// StripInternalHeadersMiddleware removes any X-PinchTab-* headers that arrived
+// from the public network. These headers are reserved for trusted internal
+// propagation (orchestrator → instance) after auth, and accepting them from
+// public clients would let a bearer-authenticated caller spoof another
+// session's identity.
+//
+// Mount as the outermost middleware on every public-facing server. Trusted
+// internal hops re-add the headers after the strip layer.
+func StripInternalHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stripPinchtabHeaders(r.Header)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func RequestIDMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rid := r.Header.Get("X-Request-Id")

@@ -89,7 +89,7 @@ func (h *Handlers) HandleFind(w http.ResponseWriter, r *http.Request) {
 	// Keep ctxTab so we can reuse it for CDP operations (e.g. auto-refresh).
 	ctxTab, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctxTab, resolvedTabID); !ok {

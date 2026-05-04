@@ -351,7 +351,7 @@ func (h *Handlers) HandleFrame(w http.ResponseWriter, r *http.Request) {
 
 	ctx, resolvedTabID, err := h.tabContextWithHeader(w, r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 

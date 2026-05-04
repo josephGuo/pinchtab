@@ -41,12 +41,32 @@ type Config struct {
 	PersistPath string
 }
 
+// LifecycleEvent describes a session-state transition that downstream
+// components (orchestrator binding eviction, instance current-tab cleanup)
+// may want to react to.
+type LifecycleEvent struct {
+	SessionID string
+	AgentID   string
+	Reason    string // "revoked" | "expired" | "pruned"
+}
+
+// LifecycleHook receives events after a store mutation has committed.
+// Hooks are invoked outside the store lock; they may do I/O but must not
+// re-enter the store synchronously in a way that risks recursion.
+type LifecycleHook func(LifecycleEvent)
+
 // Store manages authenticated sessions with persistence.
 type Store struct {
 	mu       sync.Mutex
 	sessions map[string]*Session // keyed by session ID
 	cfg      Config
 	now      func() time.Time
+
+	// hooksMu protects lifecycleHooks. Held only for very short reads /
+	// writes so it never blocks anything else. Separate from `mu` so a
+	// caller adding a hook never serializes against in-flight mutations.
+	hooksMu        sync.RWMutex
+	lifecycleHooks []LifecycleHook
 }
 
 const (
@@ -56,7 +76,47 @@ const (
 	StatusActive  = "active"
 	StatusRevoked = "revoked"
 	StatusExpired = "expired"
+
+	LifecycleReasonRevoked = "revoked"
+	LifecycleReasonExpired = "expired"
+	LifecycleReasonPruned  = "pruned"
 )
+
+// OnLifecycle registers a hook for session lifecycle events. Hooks run
+// outside the store lock after a mutation has committed, so they may
+// perform I/O without blocking other store operations. Multiple hooks
+// run concurrently in separate goroutines.
+func (s *Store) OnLifecycle(fn LifecycleHook) {
+	if s == nil || fn == nil {
+		return
+	}
+	s.hooksMu.Lock()
+	s.lifecycleHooks = append(s.lifecycleHooks, fn)
+	s.hooksMu.Unlock()
+}
+
+// dispatchLifecycle fires the given events to every registered hook,
+// each in its own goroutine. Must be called after the store lock has
+// been released — never under s.mu.
+func (s *Store) dispatchLifecycle(events []LifecycleEvent) {
+	if s == nil || len(events) == 0 {
+		return
+	}
+	s.hooksMu.RLock()
+	hooks := make([]LifecycleHook, len(s.lifecycleHooks))
+	copy(hooks, s.lifecycleHooks)
+	s.hooksMu.RUnlock()
+	if len(hooks) == 0 {
+		return
+	}
+	for _, evt := range events {
+		evt := evt
+		for _, fn := range hooks {
+			fn := fn
+			go fn(evt)
+		}
+	}
+}
 
 // NewStore creates a new session store.
 func NewStore(cfg Config) *Store {
@@ -142,28 +202,43 @@ func (s *Store) authenticate(token string, touch bool) (*Session, bool) {
 	hash := hashToken(token)
 	now := s.now()
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	var (
+		match      *Session
+		ok         bool
+		expiredEvt *LifecycleEvent
+	)
 
-	for _, sess := range s.sessions {
-		if sess.Status != StatusActive {
-			continue
+	func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		for _, sess := range s.sessions {
+			if sess.Status != StatusActive {
+				continue
+			}
+			if subtle.ConstantTimeCompare(hash[:], sess.TokenHash[:]) != 1 {
+				continue
+			}
+			if s.isExpired(sess, now) {
+				sess.Status = StatusExpired
+				s.saveLocked()
+				expiredEvt = &LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonExpired}
+				return
+			}
+			if touch {
+				sess.LastSeenAt = now
+				s.saveLocked()
+			}
+			match = sess
+			ok = true
+			return
 		}
-		if subtle.ConstantTimeCompare(hash[:], sess.TokenHash[:]) != 1 {
-			continue
-		}
-		if s.isExpired(sess, now) {
-			sess.Status = StatusExpired
-			s.saveLocked()
-			return nil, false
-		}
-		if touch {
-			sess.LastSeenAt = now
-			s.saveLocked()
-		}
-		return sess, true
+	}()
+
+	if expiredEvt != nil {
+		s.dispatchLifecycle([]LifecycleEvent{*expiredEvt})
 	}
-	return nil, false
+	return match, ok
 }
 
 // Touch updates LastSeenAt for an active, unexpired session.
@@ -225,15 +300,25 @@ func (s *Store) Revoke(sessionID string) bool {
 	if s == nil {
 		return false
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
-	sess, ok := s.sessions[strings.TrimSpace(sessionID)]
-	if !ok {
+	var event LifecycleEvent
+	revoked := func() bool {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		sess, ok := s.sessions[strings.TrimSpace(sessionID)]
+		if !ok {
+			return false
+		}
+		sess.Status = StatusRevoked
+		s.saveLocked()
+		event = LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonRevoked}
+		return true
+	}()
+	if !revoked {
 		return false
 	}
-	sess.Status = StatusRevoked
-	s.saveLocked()
+	s.dispatchLifecycle([]LifecycleEvent{event})
 	return true
 }
 
@@ -244,9 +329,10 @@ func (s *Store) UpdateConfig(cfg Config) {
 	}
 	s.mu.Lock()
 	s.applyConfig(cfg)
-	s.pruneExpiredLocked()
+	events := s.pruneExpiredLocked()
 	s.saveLocked()
 	s.mu.Unlock()
+	s.dispatchLifecycle(events)
 }
 
 // Enabled reports whether session auth is enabled.
@@ -275,17 +361,24 @@ func (s *Store) isExpired(sess *Session, now time.Time) bool {
 	return false
 }
 
-func (s *Store) pruneExpiredLocked() {
+// pruneExpiredLocked removes revoked/expired sessions. Caller must hold
+// s.mu. Returns lifecycle events the caller is responsible for dispatching
+// AFTER releasing the lock.
+func (s *Store) pruneExpiredLocked() []LifecycleEvent {
 	now := s.now()
+	var events []LifecycleEvent
 	for id, sess := range s.sessions {
 		if sess.Status == StatusRevoked {
 			delete(s.sessions, id)
+			events = append(events, LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonPruned})
 			continue
 		}
 		if s.isExpired(sess, now) {
 			delete(s.sessions, id)
+			events = append(events, LifecycleEvent{SessionID: sess.ID, AgentID: sess.AgentID, Reason: LifecycleReasonPruned})
 		}
 	}
+	return events
 }
 
 // persistence types

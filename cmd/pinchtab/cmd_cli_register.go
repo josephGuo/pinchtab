@@ -1,9 +1,13 @@
 package main
 
 import (
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/spf13/cobra"
@@ -42,6 +46,13 @@ func registerBrowserCommands() {
 		urlCmd,
 		htmlCmd,
 		stylesCmd,
+		valueCmd,
+		attrCmd,
+		countCmd,
+		boxCmd,
+		visibleCmd,
+		enabledCmd,
+		checkedCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -59,6 +70,8 @@ func registerBrowserCommands() {
 		errorsCmd,
 		clipboardCmd,
 		cacheCmd,
+		cookiesCmd,
+		setCmd,
 		storageCmd,
 		stateCmd,
 		closeCmd,
@@ -110,6 +123,13 @@ func registerBrowserCommands() {
 		urlCmd,
 		htmlCmd,
 		stylesCmd,
+		valueCmd,
+		attrCmd,
+		countCmd,
+		boxCmd,
+		visibleCmd,
+		enabledCmd,
+		checkedCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -127,6 +147,8 @@ func registerBrowserCommands() {
 		errorsCmd,
 		clipboardCmd,
 		cacheCmd,
+		cookiesCmd,
+		setCmd,
 		storageCmd,
 		stateCmd,
 		closeCmd,
@@ -251,6 +273,13 @@ func configureBrowserFlags() {
 	stylesCmd.Flags().StringP("selector", "s", "", "Element selector to extract styles from (ref/CSS/XPath/text). If omitted, returns computed styles for the root element.")
 	stylesCmd.Flags().String("prop", "", "Return only a single computed style property")
 	stylesCmd.Flags().Bool("json", false, "Output full JSON response instead of just styles")
+	valueCmd.Flags().Bool("json", false, "Output full JSON response instead of just value")
+	attrCmd.Flags().Bool("json", false, "Output full JSON response instead of just attribute value")
+	countCmd.Flags().Bool("json", false, "Output full JSON response instead of just count")
+	boxCmd.Flags().Bool("json", false, "Output full JSON response instead of just bounding box")
+	visibleCmd.Flags().Bool("json", false, "Output full JSON response instead of just visibility")
+	enabledCmd.Flags().Bool("json", false, "Output full JSON response instead of just enabled state")
+	checkedCmd.Flags().Bool("json", false, "Output full JSON response instead of just checked state")
 
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
@@ -291,6 +320,13 @@ func configureBrowserFlags() {
 		urlCmd,
 		htmlCmd,
 		stylesCmd,
+		valueCmd,
+		attrCmd,
+		countCmd,
+		boxCmd,
+		visibleCmd,
+		enabledCmd,
+		checkedCmd,
 		clickCmd,
 		dblclickCmd,
 		hoverCmd,
@@ -317,6 +353,12 @@ func configureBrowserFlags() {
 		waitCmd,
 		dialogAcceptCmd,
 		dialogDismissCmd,
+		setViewportCmd,
+		setGeoCmd,
+		setOfflineCmd,
+		setHeadersCmd,
+		setCredentialsCmd,
+		setMediaCmd,
 	)
 
 	evalCmd.Flags().Bool("await-promise", false, "Resolve a returned Promise before responding")
@@ -369,8 +411,15 @@ func configureBrowserFlags() {
 		healthCmd,
 		cacheClearCmd,
 		cacheStatusCmd,
+		cookiesClearCmd,
 		frameCmd,
 		networkCmd,
+		setViewportCmd,
+		setGeoCmd,
+		setOfflineCmd,
+		setHeadersCmd,
+		setCredentialsCmd,
+		setMediaCmd,
 	)
 
 	scrollintoviewCmd.Flags().String("css", "", "CSS selector instead of ref")
@@ -434,29 +483,67 @@ func addRootCommands(cmds ...*cobra.Command) {
 	rootCmd.AddCommand(cmds...)
 }
 
-// addTabFlag wires a --tab flag onto the given commands and defaults its value
-// from the state file written by `nav`. This lets agents avoid threading
-// `--tab "$TAB"` through every command:
+// addTabFlag wires a --tab flag onto the given commands. Anonymous CLI calls
+// default its value from the state file written by `nav`, which lets local
+// single-agent workflows avoid threading `--tab "$TAB"` through every command:
 //
 //	pinchtab nav http://example.com   # writes tab ID to state file
 //	pinchtab snap -i -c               # auto-reads from state file
 //
-// Explicit --tab still wins (cobra flag precedence). If no state file is set,
-// the server picks the active tab as before.
+// Explicit --tab still wins (cobra flag precedence). Identified callers
+// (PINCHTAB_SESSION, --agent-id, or PINCHTAB_AGENT_ID) leave --tab unset so the
+// server-side scoped current-tab store is authoritative. If no state file is
+// set, the server picks the active tab as before.
 // resolveTabArg returns the tab ID from args[0] when present, otherwise it
 // falls back to the persisted state file written by `nav`.
 func resolveTabArg(args []string) string {
 	if len(args) > 0 && args[0] != "" {
 		return args[0]
 	}
+	if !useLocalTabStateFile() {
+		return ""
+	}
 	return readTabStateFile()
 }
 
 func addTabFlag(cmds ...*cobra.Command) {
-	defaultTab := readTabStateFile()
 	for _, cmd := range cmds {
-		cmd.Flags().String("tab", defaultTab, "Tab ID")
+		cmd.Flags().String("tab", "", "Tab ID")
+		existingPreRun := cmd.PreRun
+		cmd.PreRun = func(cmd *cobra.Command, args []string) {
+			defaultTabFlagFromState(cmd)
+			if existingPreRun != nil {
+				existingPreRun(cmd, args)
+			}
+		}
 	}
+}
+
+func defaultTabFlagFromState(cmd *cobra.Command) {
+	if cmd == nil || !useLocalTabStateFile() {
+		return
+	}
+	flag := cmd.Flags().Lookup("tab")
+	if flag == nil || flag.Changed || flag.Value.String() != "" {
+		return
+	}
+	tabID := readTabStateFile()
+	if tabID == "" {
+		return
+	}
+	if !probeTabExists(tabID) {
+		_ = os.Remove(tabStateFile())
+		return
+	}
+	_ = cmd.Flags().Set("tab", tabID)
+	flag.Changed = false
+}
+
+func useLocalTabStateFile() bool {
+	if strings.TrimSpace(os.Getenv("PINCHTAB_SESSION")) != "" {
+		return false
+	}
+	return resolveCLIAgentID() == ""
 }
 
 // tabStateFile returns the path to the tab state file.
@@ -481,7 +568,7 @@ func readTabStateFile() string {
 
 // WriteTabStateFile persists the tab ID to the state file for subsequent commands.
 func WriteTabStateFile(tabID string) {
-	if tabID == "" {
+	if tabID == "" || !useLocalTabStateFile() {
 		return
 	}
 	path := tabStateFile()
@@ -492,10 +579,57 @@ func WriteTabStateFile(tabID string) {
 // ClearTabStateFileIfCurrent clears the current-tab state when the saved tab is
 // known to have been closed.
 func ClearTabStateFileIfCurrent(tabID string) {
-	if tabID == "" || readTabStateFile() != tabID {
+	if tabID == "" || !useLocalTabStateFile() || readTabStateFile() != tabID {
 		return
 	}
 	_ = os.Remove(tabStateFile())
+}
+
+// probeTabExists checks whether a cached tab ID still exists on the server.
+// Returns true if the tab is valid, the server is unreachable (it may auto-start
+// later), or the check is inconclusive. Returns false only on a definitive 404.
+func probeTabExists(tabID string) bool {
+	base := resolveBaseURL("http://127.0.0.1:9867")
+	token := resolveToken()
+
+	// Fast path: if the port isn't listening, skip the HTTP probe entirely.
+	// This avoids a 2s timeout on every CLI command when the server is down.
+	if !portIsListening(base) {
+		return true
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	req, err := http.NewRequest("GET", base+"/tabs/"+tabID+"/title", nil)
+	if err != nil {
+		return true
+	}
+	req.Header.Set("X-PinchTab-Source", "client")
+	if token != "" {
+		if strings.HasPrefix(token, "ses_") {
+			req.Header.Set("Authorization", "Session "+token)
+		} else {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return true
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode != http.StatusNotFound
+}
+
+// portIsListening does a fast TCP dial to check if anything is listening.
+func portIsListening(baseURL string) bool {
+	host := strings.TrimPrefix(baseURL, "http://")
+	host = strings.TrimPrefix(host, "https://")
+	conn, err := net.DialTimeout("tcp", host, 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }
 
 func addJSONFlag(cmds ...*cobra.Command) {

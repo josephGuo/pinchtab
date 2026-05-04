@@ -3,6 +3,8 @@ package actions
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
 	"github.com/pinchtab/pinchtab/internal/cli/output"
@@ -118,6 +120,10 @@ func Navigate(client *http.Client, base, token string, url string, cmd *cobra.Co
 		fmt.Println(resultTabID)
 	}
 
+	if !isIdentifiedCaller() {
+		output.Hint("no session set — this tab is shared. Create one with: export PINCHTAB_SESSION=$(pinchtab session create --agent-id <id> --print-token)")
+	}
+
 	// If --snap or --snap-diff flag is set, fetch and output snapshot
 	snap, _ := cmd.Flags().GetBool("snap")
 	snapDiff, _ := cmd.Flags().GetBool("snap-diff")
@@ -178,6 +184,11 @@ func postNavigate(client *http.Client, base, token string, req navigateRequest, 
 		return apiclient.PrintAndDecode(respBody)
 	}
 	return result
+}
+
+func isIdentifiedCaller() bool {
+	return strings.TrimSpace(os.Getenv("PINCHTAB_SESSION")) != "" ||
+		strings.TrimSpace(os.Getenv("PINCHTAB_AGENT_ID")) != ""
 }
 
 func tabIDFromNavigateResult(result map[string]any) string {

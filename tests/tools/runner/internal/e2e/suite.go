@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -475,10 +476,11 @@ type suiteTestResult struct {
 }
 
 type suiteReportData struct {
-	Results []suiteTestResult
-	Passed  int
-	Failed  int
-	TotalMs int64
+	Results   []suiteTestResult
+	Passed    int
+	Failed    int
+	TotalMs   int64
+	ErrorTail string
 }
 
 func (r *Runner) writeSuiteReports(def suiteDef, duration time.Duration, exitCode int) suiteReportData {
@@ -503,6 +505,7 @@ func (r *Runner) writeSuiteReports(def suiteDef, duration time.Duration, exitCod
 
 func (r *Runner) buildSuiteReportData(def suiteDef, duration time.Duration, exitCode int) suiteReportData {
 	results := r.parseSuiteResults(def)
+	var errorTail string
 	if exitCode != 0 && !hasFailedResult(results) {
 		name := "Suite failed before test results were emitted"
 		if len(results) > 0 {
@@ -513,14 +516,16 @@ func (r *Runner) buildSuiteReportData(def suiteDef, duration time.Duration, exit
 			Status:     "failed",
 			DurationMs: duration.Milliseconds(),
 		})
+		errorTail = r.extractOutputTail(def, 20)
 	}
 
 	passed, failed, totalMs := countSuiteResults(results)
 	return suiteReportData{
-		Results: results,
-		Passed:  passed,
-		Failed:  failed,
-		TotalMs: totalMs,
+		Results:   results,
+		Passed:    passed,
+		Failed:    failed,
+		TotalMs:   totalMs,
+		ErrorTail: errorTail,
 	}
 }
 
@@ -562,6 +567,34 @@ func cleanResultName(name string) string {
 	name = strings.TrimPrefix(name, "✅ ")
 	name = strings.TrimPrefix(name, "❌ ")
 	return name
+}
+
+var ansiEscapeRe = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+func (r *Runner) extractOutputTail(def suiteDef, maxLines int) string {
+	data, err := os.ReadFile(filepath.Join(r.repoRoot, def.Output))
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+
+	var meaningful []string
+	for _, line := range lines {
+		stripped := ansiEscapeRe.ReplaceAllString(line, "")
+		stripped = strings.TrimSpace(stripped)
+		if stripped == "" || strings.HasPrefix(stripped, "E2E_RESULT") {
+			continue
+		}
+		meaningful = append(meaningful, stripped)
+	}
+
+	if len(meaningful) == 0 {
+		return ""
+	}
+	if len(meaningful) > maxLines {
+		meaningful = meaningful[len(meaningful)-maxLines:]
+	}
+	return strings.Join(meaningful, "\n")
 }
 
 func countSuiteResults(results []suiteTestResult) (passed, failed int, totalMs int64) {
@@ -634,6 +667,14 @@ func (r *Runner) printSuiteSummary(def suiteDef, data suiteReportData, duration 
 			if result.Status == "failed" {
 				_, _ = fmt.Fprintf(r.stdout, "  - %s\n", result.Name)
 			}
+		}
+	}
+
+	if data.ErrorTail != "" {
+		_, _ = fmt.Fprintln(r.stdout, "")
+		_, _ = fmt.Fprintln(r.stdout, "  Error output (last lines):")
+		for _, line := range strings.Split(data.ErrorTail, "\n") {
+			_, _ = fmt.Fprintf(r.stdout, "    %s\n", line)
 		}
 	}
 	_, _ = fmt.Fprintln(r.stdout, "")

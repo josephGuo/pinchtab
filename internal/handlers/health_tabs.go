@@ -132,8 +132,8 @@ func (h *Handlers) HandleTabMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, _, err := h.Bridge.TabContext(tabID); err != nil {
-		httpx.Error(w, http.StatusNotFound, fmt.Errorf("tab not found"))
+	if _, _, err := h.tabContext(r, tabID); err != nil {
+		WriteTabContextError(w, err, http.StatusNotFound)
 		return
 	}
 
@@ -169,7 +169,7 @@ func (h *Handlers) HandleTabs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	currentTabID := ""
-	if _, resolvedID, err := h.Bridge.TabContext(""); err == nil {
+	if _, resolvedID, err := h.tabContext(r, ""); err == nil {
 		currentTabID = resolvedID
 	}
 

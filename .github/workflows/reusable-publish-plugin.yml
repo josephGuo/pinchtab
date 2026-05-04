@@ -6,14 +6,24 @@ on:
       version:
         required: true
         type: string
+      ref:
+        required: false
+        type: string
+        default: ''
     secrets:
       NPM_TOKEN:
+        required: true
+      CLAWHUB_TOKEN:
         required: true
   workflow_dispatch:
     inputs:
       version:
         description: 'Plugin version (e.g. 0.3.0, without v prefix)'
         required: true
+      ref:
+        description: 'Git ref to publish from. Defaults to the workflow ref.'
+        required: false
+        default: ''
 
 
 permissions:
@@ -21,10 +31,12 @@ permissions:
 
 jobs:
   publish:
-    name: Publish to npm
+    name: Publish plugin
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v6
         with:
@@ -72,6 +84,34 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Install ClawHub CLI
+        run: npm i -g clawhub
+
+      - name: Authenticate with ClawHub
+        run: clawhub login --token "$CLAWHUB_TOKEN" --no-browser
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+
+      - name: Publish to ClawHub
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+          CHECKOUT_REF: ${{ inputs.ref || github.ref }}
+        run: |
+          SOURCE_REF="$CHECKOUT_REF"
+          SOURCE_REF="${SOURCE_REF#refs/tags/}"
+          SOURCE_REF="${SOURCE_REF#refs/heads/}"
+          SOURCE_REF="${SOURCE_REF#refs/remotes/}"
+
+          clawhub package publish ./plugin \
+            --family code-plugin \
+            --version "$VERSION" \
+            --changelog "Release v$VERSION" \
+            --tags latest \
+            --source-repo pinchtab/pinchtab \
+            --source-commit "$(git rev-parse HEAD)" \
+            --source-ref "$SOURCE_REF" \
+            --source-path plugin
+
       - name: Summary
         env:
           VERSION: ${{ steps.version.outputs.value }}
@@ -79,4 +119,5 @@ jobs:
           echo "## Plugin Published" >> "$GITHUB_STEP_SUMMARY"
           echo "- Package: @pinchtab/pinchtab" >> "$GITHUB_STEP_SUMMARY"
           echo "- Version: $VERSION" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Install: \`openclaw plugins install @pinchtab/pinchtab\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- npm: \`openclaw plugins install @pinchtab/pinchtab\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ClawHub: \`openclaw plugins install clawhub:@pinchtab/pinchtab\`" >> "$GITHUB_STEP_SUMMARY"

@@ -3,14 +3,36 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/bridge"
 )
 
 func (h *Handlers) tabContext(r *http.Request, tabID string) (context.Context, string, error) {
+	tabID = strings.TrimSpace(tabID)
+	scope := currentTabScopeFromRequest(r)
+	explicitTab := tabID != ""
+
+	if !explicitTab && !scope.IsGlobal() {
+		storedTabID, ok := h.CurrentTabs.Get(scope)
+		if !ok {
+			return nil, "", noCurrentTabError(scope.Description())
+		}
+		tabID = storedTabID
+	}
+
 	ctx, resolvedID, err := h.Bridge.TabContext(tabID)
+	if err != nil && !explicitTab && !scope.IsGlobal() {
+		// The stored pointer references a tab the bridge no longer knows
+		// about: drop the pointer and surface the canonical empty-pointer
+		// error so the caller sees 409 no_current_tab rather than a stale
+		// "tab not found" 404.
+		h.CurrentTabs.Clear(scope)
+		return nil, "", noCurrentTabError(scope.Description())
+	}
 	if err == nil {
+		h.setCurrentTabForRequest(r, resolvedID)
 		h.recordActivity(r, activity.Update{TabID: resolvedID})
 	}
 	return ctx, resolvedID, err
@@ -64,4 +86,25 @@ func (h *Handlers) recordEngine(r *http.Request, engine string) {
 
 func (h *Handlers) recordResolvedTab(r *http.Request, tabID string) {
 	h.recordActivity(r, activity.Update{TabID: tabID})
+}
+
+func (h *Handlers) setCurrentTabForRequest(r *http.Request, tabID string) {
+	if h == nil || h.CurrentTabs == nil {
+		return
+	}
+	h.CurrentTabs.Set(currentTabScopeFromRequest(r), tabID)
+}
+
+func (h *Handlers) clearCurrentTabReferences(tabID string) {
+	if h == nil || h.CurrentTabs == nil {
+		return
+	}
+	h.CurrentTabs.ClearTab(tabID)
+}
+
+func (h *Handlers) scopedCurrentTabForRequest(r *http.Request) (string, bool) {
+	if h == nil || h.CurrentTabs == nil {
+		return "", false
+	}
+	return h.CurrentTabs.Get(currentTabScopeFromRequest(r))
 }

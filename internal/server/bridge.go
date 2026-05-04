@@ -69,12 +69,14 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 
 	server := &http.Server{
 		Addr: listenAddr,
-		Handler: handlers.RequestIDMiddleware(
-			activity.Middleware(
-				actStore,
-				"bridge",
-				handlers.SecurityHeadersMiddleware(cfg,
-					handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+		Handler: handlers.TrustedInternalProxyStripMiddleware(os.Getenv("PINCHTAB_INTERNAL_TOKEN"))(
+			handlers.RequestIDMiddleware(
+				activity.Middleware(
+					actStore,
+					"bridge",
+					handlers.SecurityHeadersMiddleware(cfg,
+						handlers.LoggingMiddleware(handlers.RateLimitMiddleware(handlers.AuthMiddleware(cfg, mux))),
+					),
 				),
 			),
 		),

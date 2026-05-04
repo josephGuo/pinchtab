@@ -44,7 +44,7 @@ Check if the server is running and healthy.
 ## Browser Commands
 
 ### `pinchtab nav <url>`
-Navigate the current tracked tab to a URL, or create one when no current tab is available. This is the browser command that auto-starts the default local server when it is not already running.
+Navigate the current tracked tab to a URL, or create one when no current tab is available. This is the browser command that auto-starts the default local server when it is not already running. Without a session, `nav` uses a shared current tab — set `PINCHTAB_SESSION` first to get an isolated tab.
 
 ```bash
 pinchtab nav https://pinchtab.com
@@ -72,6 +72,8 @@ pinchtab tab <tabId>         # Focus a tab by ID or 1-based index
 pinchtab nav <url> --new-tab # Open a new tab and navigate it
 pinchtab tab close <tabId>   # Close specific tab
 ```
+
+Unscoped commands resolve the current tab by caller identity. Session-authenticated callers use a current tab scoped to that session; `--agent-id` / `PINCHTAB_AGENT_ID` callers use a current tab scoped to that agent when no session is present; anonymous CLI calls use the shared local current-tab state file.
 
 ---
 

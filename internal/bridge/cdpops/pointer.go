@@ -240,7 +240,10 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 
 	return chromedp.Run(ctx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.focus", map[string]any{"backendNodeId": nodeID}, nil)
+			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
+				"type": "mouseMoved",
+				"x":    x, "y": y,
+			}, nil)
 		}),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchMouseEvent", map[string]any{
@@ -258,7 +261,50 @@ func ClickByNodeID(ctx context.Context, nodeID int64) error {
 				"x":          x, "y": y,
 			}, nil)
 		}),
+		// CDP mouse events don't trigger default browser navigation on <a>
+		// elements. For links, fire a JS-level .click() so the browser
+		// follows the href.
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return jsClickIfLink(ctx, nodeID)
+		}),
 	)
+}
+
+// jsClickIfLink fires element.click() via JS if the node is an <a> with an
+// href. CDP Input.dispatchMouseEvent doesn't trigger the browser's default
+// link-navigation behavior, so this ensures anchor clicks actually navigate.
+func jsClickIfLink(ctx context.Context, nodeID int64) error {
+	// Resolve backend node to a remote object so we can call functions on it.
+	var resolved json.RawMessage
+	if err := chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.resolveNode", map[string]any{
+		"backendNodeId": nodeID,
+	}, &resolved); err != nil {
+		return nil
+	}
+	var obj struct {
+		Object struct {
+			ObjectID string `json:"objectId"`
+		} `json:"object"`
+	}
+	if json.Unmarshal(resolved, &obj) != nil || obj.Object.ObjectID == "" {
+		return nil
+	}
+
+	const js = `function() {
+		var el = this;
+		while (el && el.nodeType === 1) {
+			if (el.tagName === 'A' && el.hasAttribute('href')) {
+				el.click();
+				return;
+			}
+			el = el.parentElement;
+		}
+	}`
+	return chromedp.FromContext(ctx).Target.Execute(ctx,
+		"Runtime.callFunctionOn", map[string]any{
+			"functionDeclaration": js,
+			"objectId":            obj.Object.ObjectID,
+		}, nil)
 }
 
 func DoubleClickByCoordinate(ctx context.Context, x, y float64) error {

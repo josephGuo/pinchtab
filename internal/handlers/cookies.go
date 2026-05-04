@@ -25,7 +25,7 @@ func (h *Handlers) HandleGetCookies(w http.ResponseWriter, r *http.Request) {
 
 	ctx, resolvedTabID, err := h.tabContext(r, tabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {
@@ -128,6 +128,48 @@ type cookieSetRequest struct {
 	Expires  float64 `json:"expires"`
 }
 
+// HandleClearCookies clears all browser cookies.
+//
+// @Endpoint DELETE /cookies
+func (h *Handlers) HandleClearCookies(w http.ResponseWriter, r *http.Request) {
+	if err := h.ensureChrome(); err != nil {
+		httpx.Error(w, http.StatusServiceUnavailable, err)
+		return
+	}
+
+	ctx := h.Bridge.BrowserContext()
+	if err := h.Bridge.ClearCookies(ctx); err != nil {
+		if h.writeBridgeUnavailable(w, err) {
+			return
+		}
+		httpx.Error(w, http.StatusInternalServerError, fmt.Errorf("clear cookies: %w", err))
+		return
+	}
+
+	h.recordActivity(r, activity.Update{Action: "cookies.clear"})
+
+	httpx.JSON(w, http.StatusOK, map[string]any{"status": "cleared"})
+}
+
+// HandleTabClearCookies clears all browser cookies (tab-scoped variant for API consistency).
+//
+// @Endpoint DELETE /tabs/{id}/cookies
+func (h *Handlers) HandleTabClearCookies(w http.ResponseWriter, r *http.Request) {
+	tabID := r.PathValue("id")
+	if tabID == "" {
+		httpx.Error(w, 400, fmt.Errorf("tab id required"))
+		return
+	}
+
+	// Verify tab exists before clearing.
+	if _, _, err := h.tabContext(r, tabID); err != nil {
+		WriteTabContextError(w, err, 404)
+		return
+	}
+
+	h.HandleClearCookies(w, r)
+}
+
 func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 	var req cookieRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBodySize)).Decode(&req); err != nil {
@@ -147,7 +189,7 @@ func (h *Handlers) HandleSetCookies(w http.ResponseWriter, r *http.Request) {
 
 	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	if _, ok := h.enforceCurrentTabDomainPolicy(w, r, ctx, resolvedTabID); !ok {

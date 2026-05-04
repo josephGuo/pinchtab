@@ -83,6 +83,12 @@ func ValidateFileConfig(fc *FileConfig) []error {
 	}
 
 	// Instance defaults validation
+	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode != "" {
+		errs = append(errs, ValidationError{
+			Field:   "instanceDefaults.headless",
+			Message: fmt.Sprintf("both headless and mode are set; mode %q takes precedence", fc.InstanceDefaults.Mode),
+		})
+	}
 	if fc.InstanceDefaults.Mode != "" && fc.InstanceDefaults.Mode != "headless" && fc.InstanceDefaults.Mode != "headed" {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.mode",

@@ -315,7 +315,8 @@ func (o *Orchestrator) handleInstanceTabs(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tabs, err := o.fetchTabs(inst)
+	fresh := r.URL.Query().Get("fresh") == "1"
+	tabs, err := o.instanceTabsCached(inst, fresh)
 	if err != nil {
 		httpx.Error(w, 502, fmt.Errorf("failed to fetch tabs for instance %q: %w", id, err))
 		return

@@ -21,6 +21,7 @@ Notes:
 
 - CLI users should prefer `pinchtab --agent-id <agent-id> ...` instead of setting the header manually
 - scheduler-submitted tasks reuse their `agentId` as `X-Agent-Id` when the task is executed
+- omitted `tabId` resolves by caller identity: agent sessions use a session-scoped current tab, `X-Agent-Id` uses an agent-scoped current tab when no session is present, and anonymous requests use the shared global/default tab
 
 ## Navigate
 
@@ -337,7 +338,7 @@ curl -X POST /close -H 'Content-Type: application/json' -d '{}'
 curl -X POST /tabs/TARGET_ID/close
 ```
 
-Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in POST body.
+Multi-tab: pass `?tabId=TARGET_ID` to snapshot/screenshot/text, or `"tabId"` in POST body. Explicit tab IDs always override and update the caller's current-tab scope.
 
 ## Tab-specific endpoints
 

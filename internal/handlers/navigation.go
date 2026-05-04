@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -147,8 +148,26 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	explicitTabID := strings.TrimSpace(req.TabID) != ""
+	scopedCurrentForNavigate := false
+	identifiedCaller := !currentTabScopeFromRequest(r).IsGlobal()
+	if !explicitTabID && !req.NewTab {
+		if scopedTabID, ok := h.scopedCurrentTabForRequest(r); ok {
+			req.TabID = scopedTabID
+			scopedCurrentForNavigate = true
+		} else if identifiedCaller && h.EmptyPointerPolicy() == EmptyPointerStrict {
+			// Strict empty-pointer policy: identified callers must pin a
+			// tab explicitly. Refuse to lazily create one.
+			httpx.ErrorCode(w, http.StatusConflict, "no_current_tab",
+				"no current tab; explicit tabId required under strict empty-pointer policy",
+				false, nil)
+			return
+		}
+	}
+
 	// Default to creating new tab (API design: /navigate always creates new tab)
-	// Unless explicitly reusing an existing tab by specifying TabID
+	// unless explicitly reusing an existing tab, or an identified caller has a
+	// scoped current tab.
 	if req.TabID == "" {
 		req.NewTab = true
 	}
@@ -197,65 +216,35 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.NewTab {
-		// Create a blank tab first so the requested URL becomes the first
-		// real history entry.
-		newTabID, newCtx, _, err := h.Bridge.CreateTab("")
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("new tab: %w", err))
-			return
-		}
-
-		tCtx, tCancel := context.WithTimeout(newCtx, navTimeout)
-		defer tCancel()
-		go httpx.CancelOnClientDone(r.Context(), tCancel)
-		navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, target, trustedCIDRs)
-		if err != nil {
-			httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
-			return
-		}
-
-		if len(blockPatterns) > 0 {
-			_ = bridge.SetResourceBlocking(tCtx, blockPatterns)
-		}
-
-		if err := bridge.NavigatePageWithRedirectLimit(tCtx, req.URL, h.Config.MaxRedirects); err != nil {
-			if navGuard != nil {
-				if blockedErr := navGuard.blocked(); blockedErr != nil {
-					httpx.Error(w, http.StatusForbidden, blockedErr)
-					return
-				}
-			}
-			code := 500
-			errMsg := err.Error()
-			if errors.Is(err, bridge.ErrTooManyRedirects) {
-				code = 422
-			} else if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
-				code = 400
-			}
-			navigateErrorWithHint(w, code, err, req.URL)
-			return
-		}
-
-		if err := h.waitForNavigationState(tCtx, req.WaitFor, req.WaitSelector); err != nil {
-			httpx.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
-			return
-		}
-
-		h.maybeAutoSolve(tCtx, newTabID, autoSolverTriggerNavigate)
-
-		var navURL string
-		_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
-		title, _ := bridge.WaitForTitle(tCtx, titleWait)
-		h.recordResolvedTab(r, newTabID)
-		h.recordResolvedURL(r, navURL)
-
-		httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": navURL, "title": title})
+		h.navigateNewTabChrome(w, r, navigateChromeOptions{
+			URL:           req.URL,
+			WaitFor:       req.WaitFor,
+			WaitSelector:  req.WaitSelector,
+			NavTimeout:    navTimeout,
+			TitleWait:     titleWait,
+			Target:        target,
+			TrustedCIDRs:  trustedCIDRs,
+			BlockPatterns: blockPatterns,
+		})
 		return
 	}
 
 	ctx, resolvedTabID, err := h.tabContext(r, req.TabID)
 	if err != nil {
-		httpx.Error(w, 404, err)
+		if scopedCurrentForNavigate {
+			h.navigateNewTabChrome(w, r, navigateChromeOptions{
+				URL:           req.URL,
+				WaitFor:       req.WaitFor,
+				WaitSelector:  req.WaitSelector,
+				NavTimeout:    navTimeout,
+				TitleWait:     titleWait,
+				Target:        target,
+				TrustedCIDRs:  trustedCIDRs,
+				BlockPatterns: blockPatterns,
+			})
+			return
+		}
+		WriteTabContextError(w, err, 404)
 		return
 	}
 	// Navigate signals fresh work on this tab — drop any pending auto-close
@@ -306,9 +295,78 @@ func (h *Handlers) HandleNavigate(w http.ResponseWriter, r *http.Request) {
 	var navURL string
 	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
 	title, _ := bridge.WaitForTitle(tCtx, titleWait)
+	h.setCurrentTabForRequest(r, resolvedTabID)
 	h.recordResolvedURL(r, navURL)
 
 	httpx.JSON(w, 200, map[string]any{"tabId": resolvedTabID, "url": navURL, "title": title})
+}
+
+type navigateChromeOptions struct {
+	URL           string
+	WaitFor       string
+	WaitSelector  string
+	NavTimeout    time.Duration
+	TitleWait     time.Duration
+	Target        *validatedNavigateTarget
+	TrustedCIDRs  []*net.IPNet
+	BlockPatterns []string
+}
+
+func (h *Handlers) navigateNewTabChrome(w http.ResponseWriter, r *http.Request, opts navigateChromeOptions) {
+	// Create a blank tab first so the requested URL becomes the first
+	// real history entry.
+	newTabID, newCtx, _, err := h.Bridge.CreateTab("")
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("new tab: %w", err))
+		return
+	}
+
+	tCtx, tCancel := context.WithTimeout(newCtx, opts.NavTimeout)
+	defer tCancel()
+	go httpx.CancelOnClientDone(r.Context(), tCancel)
+	navGuard, err := installNavigateRuntimeGuard(tCtx, tCancel, opts.Target, opts.TrustedCIDRs)
+	if err != nil {
+		httpx.Error(w, 500, fmt.Errorf("navigation guard: %w", err))
+		return
+	}
+
+	if len(opts.BlockPatterns) > 0 {
+		_ = bridge.SetResourceBlocking(tCtx, opts.BlockPatterns)
+	}
+
+	if err := bridge.NavigatePageWithRedirectLimit(tCtx, opts.URL, h.Config.MaxRedirects); err != nil {
+		if navGuard != nil {
+			if blockedErr := navGuard.blocked(); blockedErr != nil {
+				httpx.Error(w, http.StatusForbidden, blockedErr)
+				return
+			}
+		}
+		code := 500
+		errMsg := err.Error()
+		if errors.Is(err, bridge.ErrTooManyRedirects) {
+			code = 422
+		} else if strings.Contains(errMsg, "invalid URL") || strings.Contains(errMsg, "Cannot navigate to invalid URL") || strings.Contains(errMsg, "ERR_INVALID_URL") {
+			code = 400
+		}
+		navigateErrorWithHint(w, code, err, opts.URL)
+		return
+	}
+
+	if err := h.waitForNavigationState(tCtx, opts.WaitFor, opts.WaitSelector); err != nil {
+		httpx.ErrorCode(w, 400, "bad_wait_for", err.Error(), false, nil)
+		return
+	}
+
+	h.maybeAutoSolve(tCtx, newTabID, autoSolverTriggerNavigate)
+
+	var navURL string
+	_ = chromedp.Run(tCtx, chromedp.Location(&navURL))
+	title, _ := bridge.WaitForTitle(tCtx, opts.TitleWait)
+	h.setCurrentTabForRequest(r, newTabID)
+	h.recordResolvedTab(r, newTabID)
+	h.recordResolvedURL(r, navURL)
+
+	httpx.JSON(w, 200, map[string]any{"tabId": newTabID, "url": navURL, "title": title})
 }
 
 // HandleTabNavigate navigates an existing tab identified by path ID.

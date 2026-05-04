@@ -51,6 +51,8 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 
 	steps, _ := report["steps"].([]any)
 	var answered, failed, skipped int
+	var totalDurationMs float64
+	var stepsWithDuration int
 	seen := make(map[string]string)
 	for _, s := range steps {
 		step, _ := s.(map[string]any)
@@ -62,6 +64,10 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 			failed++
 		case "skip":
 			skipped++
+		}
+		if d, ok := step["duration_ms"].(float64); ok && d > 0 {
+			totalDurationMs += d
+			stepsWithDuration++
 		}
 		id, _ := step["id"].(string)
 		if id == "" {
@@ -176,6 +182,15 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 	}
 	rows = append(rows, row{"Errors", "0", fmt.Sprintf("%d", failed)})
 
+	if stepsWithDuration > 0 {
+		avgMs := totalDurationMs / float64(stepsWithDuration)
+		rows = append(rows,
+			row{"", "", ""},
+			row{"Avg time/step", "", fmt.Sprintf("%.1fs", avgMs/1000)},
+			row{"Total step time", "", fmtDuration(totalDurationMs)},
+		)
+	}
+
 	if usage != nil {
 		rows = append(rows,
 			row{"", "", ""},
@@ -259,6 +274,21 @@ func RunSummarize(argv []string, stdout, stderr io.Writer) int {
 
 	_, _ = fmt.Fprintln(stdout)
 	return 0
+}
+
+func fmtDuration(ms float64) string {
+	totalSec := int(ms / 1000)
+	if totalSec < 60 {
+		return fmt.Sprintf("%ds", totalSec)
+	}
+	m := totalSec / 60
+	s := totalSec % 60
+	if m < 60 {
+		return fmt.Sprintf("%dm%02ds", m, s)
+	}
+	h := m / 60
+	m = m % 60
+	return fmt.Sprintf("%dh%02dm%02ds", h, m, s)
 }
 
 func fmtInt(n int64) string {
