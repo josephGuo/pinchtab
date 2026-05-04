@@ -17,33 +17,27 @@ pinchtab completion <shell>             # Generate shell completions
 
 ## Navigation
 
-`pinchtab nav <url>` uses `/navigate`. When you do not pass `--tab`, PinchTab opens a new tab and navigates it.
-
 ```bash
-pinchtab nav <url>                      # Open a new tab and navigate it
+pinchtab nav <url>                      # Navigate current tab, or create one if needed
 pinchtab nav <url> --tab <id>           # Reuse a specific tab
 pinchtab nav <url> --new-tab            # Explicitly force a new tab
 pinchtab nav <url> --block-images       # Block images for this navigation
 pinchtab nav <url> --block-ads          # Block ads for this navigation
 pinchtab nav <url> --snap               # Navigate and output interactive snapshot
-pinchtab quick <url>                    # Navigate and take a snapshot
 pinchtab back                           # Go back in the active tab
 pinchtab back --tab <id>                # Go back in a specific tab
 pinchtab forward                        # Go forward in the active tab
 pinchtab reload                         # Reload the active tab
 ```
 
-Hidden aliases: `goto`, `navigate`, `open`
-
 ## Tabs
 
-The `tab` command only lists, focuses, creates, and closes tabs. It does not proxy the rest of the browser command set.
+The `tab` command only lists, focuses, and closes tabs. It does not proxy the rest of the browser command set.
 
 ```bash
 pinchtab tab                            # List tabs
 pinchtab tab <id>                       # Focus a tab by ID or 1-based index
-pinchtab tab new                        # Open a blank tab
-pinchtab tab new <url>                  # Open a tab and navigate it
+pinchtab nav <url> --new-tab            # Open a new tab and navigate it
 pinchtab tab close <id>                 # Close a tab
 ```
 
@@ -64,6 +58,11 @@ Most element commands accept a unified selector:
 - XPath such as `xpath://button`
 - text selector such as `text:Submit`
 - semantic selector such as `find:login button`
+- role/name selector such as `role:button Save`
+- label, placeholder, alt, title, or test id selectors such as `label:Email`, `placeholder:Search`, `alt:Logo`, `title:Close`, `testid:submit`
+- positional wrappers such as `first:button`, `last:role:button`, or `nth:2:button` (`nth` is zero-based)
+
+Structured forms such as `role:`, `label:`, and `testid:` are matched by the semantic engine against enriched snapshot descriptors. CSS, XPath, refs, the existing `text:` action selector, and bare CSS/text wrappers remain browser-side selector resolution.
 
 Selector lookup is explicit by frame. Unscoped selectors search only the current frame scope, which defaults to `main`. Use `pinchtab frame ...` before selector-based iframe work. Same-origin iframe scopes are supported; cross-origin iframe descendants are not currently exposed.
 
@@ -110,7 +109,7 @@ pinchtab drag e5 400,320
 ## Page Analysis
 
 ```bash
-pinchtab snap                           # Accessibility snapshot
+pinchtab snap [selector]                # Accessibility snapshot, optionally scoped
 pinchtab snap -i -c                     # Interactive + compact
 pinchtab snap -d                        # Diff from previous snapshot
 pinchtab snap --selector <css>          # Scope snapshot
@@ -143,11 +142,18 @@ pinchtab keyboard type <text>           # Type at the focused element
 pinchtab keyboard inserttext <text>     # Insert text without key events
 pinchtab keydown <key>                  # Hold a key down
 pinchtab keyup <key>                    # Release a key
-pinchtab wait <selector|ms>             # Wait for selector or fixed duration
-pinchtab wait --text <text>             # Wait for page text
-pinchtab wait --url <glob>              # Wait for URL match
-pinchtab wait --load networkidle        # Wait for load state
+pinchtab wait <selector>                # Wait for selector to be visible
+pinchtab wait <selector> --state hidden # Wait for selector to disappear
+pinchtab wait <ms>                      # Fixed duration sleep (escape hatch; max 30000ms — prefer condition-based waits)
+pinchtab wait --text <text>             # Wait for page text to appear
+pinchtab wait --not-text <text>         # Wait for page text to disappear
+pinchtab wait --url <glob>              # Wait for URL match (glob: **, *, ?)
+pinchtab wait --load <state>            # state: ready-state | content-loaded | network-idle
+                                        #   ready-state    → document.readyState === 'complete'
+                                        #   content-loaded → readyState in {interactive, complete}
+                                        #   network-idle   → 0 in-flight requests for 500ms (override with --idle-for)
 pinchtab wait --fn <expression>         # Wait for JS to become truthy
+pinchtab wait ... --timeout <ms>        # Override timeout (default 10000, max 30000)
 pinchtab network                        # List captured network requests
 pinchtab network <requestId>            # Show one request in detail
 pinchtab network --stream               # Stream network entries

@@ -112,7 +112,6 @@ end_test
 start_test "pinchtab snap (buttons.html)"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-sleep 1
 
 pt_get /snapshot
 assert_buttons_page "$RESULT"
@@ -123,7 +122,6 @@ end_test
 start_test "pinchtab snap (form.html)"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/form.html\"}"
-sleep 1
 
 pt_get /snapshot
 assert_form_page "$RESULT"
@@ -134,7 +132,6 @@ end_test
 start_test "pinchtab text (table.html)"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
-sleep 1
 
 TEXT_RESULT=$(e2e_curl -s "${E2E_SERVER}/text" | jq -r '.text')
 assert_table_page "$TEXT_RESULT"
@@ -142,10 +139,27 @@ assert_table_page "$TEXT_RESULT"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "inspect html/styles: GET /tabs/{id}/html and /tabs/{id}/styles"
+
+pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/table.html\"}"
+assert_ok "navigate to table page"
+TAB_ID=$(get_tab_id)
+
+pt_get "/tabs/${TAB_ID}/html?selector=%23data-table"
+assert_ok "get selected table html"
+assert_json_contains "$RESULT" '.html' '<table id="data-table">'
+assert_json_contains "$RESULT" '.html' 'Alice Johnson'
+
+pt_get "/tabs/${TAB_ID}/styles?selector=%23data-table&prop=display"
+assert_ok "get selected table styles"
+assert_json_eq "$RESULT" '.styles.display' 'table'
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "snapshot: diff mode"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-sleep 1
 
 pt_get /snapshot
 assert_ok "initial snapshot"
@@ -169,7 +183,6 @@ end_test
 start_test "snapshot: maxTokens truncation"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-sleep 1
 
 pt_get /snapshot
 FULL_COUNT=$(echo "$RESULT" | jq '.nodes | length')
@@ -192,7 +205,6 @@ end_test
 start_test "snapshot: depth parameter"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
-sleep 1
 
 pt_get /snapshot
 FULL_COUNT=$(echo "$RESULT" | jq '.nodes | length')
@@ -313,7 +325,6 @@ assert_contains "$RESULT" "Form Test" "tab B text matches form.html"
 end_test
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/find.html\"}"
-sleep 1
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab find (login button)"
@@ -350,12 +361,43 @@ assert_json_length_gte "$RESULT" ".matches" 1 "has matches"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab find (structured semantic locators)"
+
+pt_post /find -d '{"query":"role:button Log In"}'
+assert_ok "find role locator"
+assert_json_contains "$RESULT" '.strategy' 'structured' "role locator uses structured matcher"
+assert_json_eq "$RESULT" '.matches[0].name' 'Log In' "role locator matched login button"
+
+pt_post /find -d '{"query":"placeholder:Email address"}'
+assert_ok "find placeholder locator"
+assert_json_contains "$RESULT" '.strategy' 'structured' "placeholder locator uses structured matcher"
+assert_json_eq "$RESULT" '.matches[0].role' 'textbox' "placeholder locator matched textbox"
+
+pt_post /find -d '{"query":"first:role:button"}'
+assert_ok "find first role locator"
+assert_json_contains "$RESULT" '.strategy' 'structured' "wrapper locator uses structured matcher"
+assert_json_eq "$RESULT" '.matches[0].name' 'Log In' "first role locator uses document order"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
+start_test "pinchtab action (semantic label selector)"
+
+pt_post /action -d '{"kind":"type","selector":"label:Email","text":"structured@example.test","fast":true}'
+assert_ok "type by semantic label selector"
+
+pt_post /evaluate -d '{"expression":"document.querySelector(\"input[type=email]\").value"}'
+assert_ok "evaluate email value"
+assert_json_eq "$RESULT" '.result' 'structured@example.test' "semantic label selector typed into email input"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab find --tab <id>"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/find.html\",\"newTab\":true}"
 assert_ok "navigate for find"
 TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-sleep 1
 
 pt_post "/tabs/${TAB_ID}/find" -d '{"query":"sign up link"}'
 assert_ok "tab find"
@@ -366,7 +408,6 @@ end_test
 start_test "pinchtab find (explain mode)"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/find.html\"}"
-sleep 1
 
 pt_post /find -d '{"query":"login button","explain":true}'
 assert_ok "find with explain"
@@ -409,7 +450,6 @@ fi
 end_test
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/evaluate.html\"}"
-sleep 1
 
 # ─────────────────────────────────────────────────────────────────
 start_test "pinchtab evaluate (simple expression)"
@@ -464,7 +504,6 @@ start_test "pinchtab evaluate --tab <id>"
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/evaluate.html\",\"newTab\":true}"
 assert_ok "navigate for evaluate"
 TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-sleep 1
 
 pt_post "/tabs/${TAB_ID}/evaluate" -d '{"expression":"1 + 2 + 3"}'
 assert_ok "tab evaluate"

@@ -60,6 +60,11 @@ type BridgeAPI interface {
 	// Network monitoring
 	NetworkMonitor() *NetworkMonitor
 
+	// Network request interception (Fetch domain).
+	AddRouteRule(tabID string, rule RouteRule) error
+	RemoveRouteRule(tabID, pattern string) (int, error)
+	ListRouteRules(tabID string) ([]RouteRule, error)
+
 	// Dialog management
 	GetDialogManager() *DialogManager
 

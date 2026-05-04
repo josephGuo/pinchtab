@@ -21,6 +21,10 @@ type ActionFunc func(ctx context.Context, req ActionRequest) (map[string]any, er
 //	"xpath://div"     → XPath expression
 //	"text:Submit"     → text content match
 //	"find:login btn"  → semantic / natural-language query
+//	"role:button Save" → role/name locator
+//	"label:Email"     → form control by label
+//	"testid:submit"   → test id locator
+//	"last:button"     → positional selector wrapper
 //
 // For backward compatibility, the legacy Ref and Selector (CSS) fields
 // are still accepted. Call NormalizeSelector() to merge them into the
@@ -60,6 +64,12 @@ type ActionRequest struct {
 	WaitNav bool   `json:"waitNav"`
 	Fast    bool   `json:"fast"`
 	Owner   string `json:"owner"`
+
+	// Humanize, when set, overrides the per-instance `humanize` default for
+	// this action only. nil = use the configured default. true forces the
+	// bezier/jitter/pre-press-sleep code path; false forces the raw
+	// straight-to-target dispatch.
+	Humanize *bool `json:"humanize,omitempty"`
 
 	// DialogAction arms a one-shot dialog auto-handler before the action
 	// executes. Used when clicking a button/link that opens a JS dialog

@@ -182,6 +182,16 @@ Action targeting fields:
 - `deltaX` and `deltaY`
 - `waitNav`
 - `dialogAction` and `dialogText`
+- `humanize`
+
+`humanize` is a per-action override for input style. When omitted, actions use `instanceDefaults.humanize`, which defaults to `false`. Use `kind:"click"` or `kind:"type"` with `humanize:true` when a page needs the slower human-like pointer or typing path.
+
+Pointer fallback behavior:
+
+- `mouse-move` first attempts a real CDP `mouseMoved` event.
+- If headless Chromium stalls that move waiting for renderer acknowledgement, PinchTab falls back to DOM `mouseover`/`mouseenter`/`mousemove` events at the same target so hover-style checks remain responsive.
+- Non-timeout CDP errors and caller context cancellation are not hidden by the fallback.
+- `mouse-wheel` dispatches a DOM `WheelEvent` at the target point and scrolls the window when the event is not cancelled.
 
 Selector lookup is limited to the current frame scope. The default scope is `main`. Use `/frame` or `/tabs/{id}/frame` before selector-based iframe actions. Same-origin iframe scopes are supported; cross-origin iframe descendants are not currently exposed.
 
@@ -397,10 +407,21 @@ POST /errors/clear
 
 Wait body fields:
 
-- one of `selector`, `text`, `url`, `load`, `fn`, or `ms`
+- exactly one of:
+  - `selector` — CSS / XPath (`xpath:` prefix or leading `//`) / text (`text:` prefix)
+  - `text` — substring of `document.body.innerText`
+  - `notText` — wait until substring is no longer present
+  - `url` — glob pattern matched against `window.location.href` (`**`, `*`, `?`)
+  - `load` — one of:
+    - `ready-state` → `document.readyState === 'complete'`
+    - `content-loaded` → `document.readyState` in {`interactive`, `complete`}
+    - `network-idle` → zero in-flight CDP requests held for `idleFor` ms (default 500, max 10000). Legacy alias `networkidle` accepted.
+  - `fn` — JS expression polled until truthy (requires `security.allowEvaluate`)
+  - `ms` — fixed sleep in milliseconds, max 30000 (escape hatch; prefer condition-based waits)
 - optional `tabId`
-- optional `timeout`
-- optional `state` for selector waits
+- optional `timeout` — ms, default 10000, clamped 100–30000
+- optional `state` for selector waits — `visible` (default) or `hidden`
+- optional `idleFor` for `load: network-idle` — ms quiet period, default 500, clamped 0–10000
 
 Network query parameters:
 

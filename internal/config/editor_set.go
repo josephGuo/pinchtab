@@ -260,6 +260,12 @@ func setInstanceDefaultsField(c *InstanceDefaultsConfig, field, value string) er
 			return fmt.Errorf("instanceDefaults.noAnimations: %w", err)
 		}
 		c.NoAnimations = &b
+	case "humanize":
+		b, err := parseBool(value)
+		if err != nil {
+			return fmt.Errorf("instanceDefaults.humanize: %w", err)
+		}
+		c.Humanize = &b
 	case "stealthLevel":
 		c.StealthLevel = value
 	case "tabEvictionPolicy":
@@ -374,6 +380,8 @@ func setSecurityField(s *SecurityConfig, field, value string) error {
 		s.AllowDownload = &b
 	case "allowUpload":
 		s.AllowUpload = &b
+	case "allowNetworkIntercept":
+		s.AllowNetworkIntercept = &b
 	case "enableActionGuards":
 		s.EnableActionGuards = &b
 	default:

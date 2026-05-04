@@ -39,6 +39,25 @@ pinchtab config init
 
 `config init` respects `PINCHTAB_CONFIG`. If that environment variable is set, the file is created there.
 
+Generated config files include a `$schema` URL for IDE completion and validation.
+
+### `pinchtab config schema`
+
+Prints the JSON Schema URL for this PinchTab build. Source builds, development
+builds, and versions without a published schema use the `main` schema URL.
+When a matching release schema is known, PinchTab uses that release tag; when a
+newer matching schema is known, PinchTab uses the closest newer tag.
+
+```bash
+pinchtab config schema
+```
+
+Print the bundled schema JSON:
+
+```bash
+pinchtab config schema --print
+```
+
 ### `pinchtab config show`
 
 Shows the effective runtime configuration.
@@ -144,6 +163,7 @@ Current nested file-config shape:
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/pinchtab/pinchtab/main/schema/config.json",
   "configVersion": "0.8.0",
   "server": {
     "port": "9867",
@@ -172,10 +192,11 @@ Current nested file-config shape:
     "maxParallelTabs": 0,
     "userAgent": "",
     "noAnimations": false,
+    "humanize": false,
     "stealthLevel": "light",
     "tabEvictionPolicy": "close_lru",
     "tabPolicy": {
-      "lifecycle": "close_idle",
+      "lifecycle": "keep",
       "closeDelaySec": 300,
       "restore": false
     },
@@ -353,7 +374,7 @@ You can change or clear that default with `browser.extensionPaths`.
   "instanceDefaults": {
     "tabPolicy": {
       "eviction": "close_lru",
-      "lifecycle": "close_idle",
+      "lifecycle": "keep",
       "closeDelaySec": 300,
       "restore": false
     }
@@ -362,11 +383,22 @@ You can change or clear that default with `browser.extensionPaths`.
 ```
 
 - `eviction` controls what happens when `maxTabs` is reached: `close_lru`, `close_oldest`, or `reject`.
-- `lifecycle` controls idle lifecycle behavior: `close_idle` auto-closes a tab after it handles an authorized `/text`, `/snapshot`, or `/action` request; `keep` disables lifecycle auto-close.
-- `closeDelaySec` is the idle delay for `close_idle`. The default is `300` seconds.
+- `lifecycle` controls idle lifecycle behavior: `keep` disables lifecycle auto-close and is the default; `close_idle` auto-closes a tab after it handles an authorized `/text`, `/snapshot`, or `/action` request.
+- `closeDelaySec` is the idle delay for `close_idle`. The default is `300` seconds when auto-close is enabled.
 - `restore` controls whether session tabs are restored on startup. The default is `false`.
 
 `instanceDefaults.tabEvictionPolicy` is still accepted for compatibility. New configs should use `instanceDefaults.tabPolicy.eviction`.
+
+### Humanized Input
+
+`instanceDefaults.humanize` controls whether click and typing actions use the slower humanized path by default. The default is `false`, which keeps automation fast and deterministic by using raw CDP input.
+
+Callers can override the instance default per action with the JSON field `humanize`:
+
+- `{"kind":"click","selector":"#submit","humanize":true}` opts a single action into bezier mouse movement and human-like delays.
+- `{"kind":"type","selector":"#name","text":"Ada","humanize":true}` opts a single type action into the slower per-character path.
+
+Rationale: humanized input is useful for compatibility with pages that react poorly to raw input, but it adds sleeps and multi-step pointer movement. Keeping it opt-in prevents accidental seconds of overhead in default E2E and agent runs.
 
 ## Sections
 

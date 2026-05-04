@@ -7,9 +7,9 @@ require (
 	github.com/chromedp/chromedp v0.15.1
 	github.com/gobwas/ws v1.4.0
 	github.com/gost-dom/browser v0.11.0
-	github.com/mark3labs/mcp-go v0.49.0
+	github.com/mark3labs/mcp-go v0.50.0
 	github.com/pinchtab/idpishield v0.2.0
-	github.com/pinchtab/semantic v0.1.2
+	github.com/pinchtab/semantic v0.1.3
 	github.com/shirou/gopsutil/v4 v4.26.3
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/net v0.53.0

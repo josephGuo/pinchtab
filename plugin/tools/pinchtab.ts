@@ -1,6 +1,6 @@
 import type { PluginConfig } from "../types.js";
 import { pinchtabFetch, textResult, imageResult, resourceResult, normalizeActionParams, looksLikeStaleRef } from "../client.js";
-import { checkNavigationPolicy, checkEvaluatePolicy, checkDownloadPolicy, checkUploadPolicy, enforcePolicyOrReturn } from "../policy.js";
+import { checkNavigationPolicy, checkEvaluatePolicy, checkDownloadPolicy, checkUploadPolicy, checkNetworkInterceptPolicy, enforcePolicyOrReturn } from "../policy.js";
 import { ensureServerRunning, getEnhancedHealth, getLastTabId, setLastTabId } from "../session.js";
 
 export const pinchtabToolSchema = {
@@ -55,13 +55,18 @@ export const pinchtabToolSchema = {
     savePath: { type: "string", description: "Path to save downloaded file" },
     files: { type: "array", items: { type: "string" }, description: "Base64-encoded files for upload" },
     paths: { type: "array", items: { type: "string" }, description: "File paths for upload" },
-    networkAction: { type: "string", enum: ["list", "get", "export", "clear"], description: "Network sub-action" },
+    networkAction: { type: "string", enum: ["list", "get", "export", "clear", "route", "unroute"], description: "Network sub-action" },
     requestId: { type: "string", description: "Network request ID for get action" },
-    method: { type: "string", description: "Filter network by HTTP method" },
+    method: { type: "string", description: "Filter network by HTTP method (also: limits a route rule to one method; fulfill rules without method skip OPTIONS preflights to avoid breaking CORS)" },
     status: { type: "string", description: "Filter network by status (e.g. 4xx, 5xx, 200)" },
-    resourceType: { type: "string", description: "Filter network by resource type (xhr, fetch, document)" },
+    resourceType: { type: "string", description: "Filter network by resource type, or limit a route to one type (xhr, fetch, document, script, image, etc)" },
     limit: { type: "number", description: "Limit network results" },
     exportFormat: { type: "string", enum: ["har", "json"], description: "Network export format" },
+    pattern: { type: "string", description: "URL pattern for network route/unroute (substring or glob)" },
+    routeAction: { type: "string", enum: ["continue", "abort", "fulfill"], description: "Network route behavior. Default 'continue' (pass-through)." },
+    responseBody: { type: "string", description: "Response body for routeAction=fulfill (sent verbatim; not auto-encoded)" },
+    contentType: { type: "string", description: "Response Content-Type for fulfill (default application/json)" },
+    responseStatus: { type: "number", description: "Response status code for fulfill (default 200)" },
   },
   required: ["action"],
 };
@@ -80,7 +85,7 @@ export const pinchtabToolDescription = `Browser control via Pinchtab. Actions:
 - pdf: export page as PDF (landscape?, scale?, tabId?)
 - download: download file from URL (downloadUrl, savePath?, tabId?)
 - upload: upload files to file input (selector, files[]|paths[], tabId?)
-- network: capture/inspect network requests (networkAction: list|get|export|clear, requestId?, method?, status?, limit?)
+- network: capture/inspect/intercept network requests (networkAction: list|get|export|clear|route|unroute). For route: pattern, routeAction (continue|abort|fulfill), responseBody?, contentType?, responseStatus?, resourceType?. For unroute: pattern? (omit to clear all). Fulfill is BLOCKED on hosts in security.allowedDomains (sensitive surfaces) and allowed elsewhere; rules on allowlisted hosts fall through to real fetch.
 - health: check connectivity
 
 Token strategy: use "text" for reading (~800 tokens), "snapshot" with filter=interactive&format=compact for interactions (~3,600), diff=true on subsequent snapshots.`;
@@ -323,6 +328,37 @@ export async function executePinchtabAction(cfg: PluginConfig, params: any): Pro
         return resourceResult("har://export", "application/json", Buffer.from(JSON.stringify(result)).toString("base64"));
       }
       return textResult(result);
+    }
+
+    if (networkAction === "route") {
+      const policyResult = enforcePolicyOrReturn(checkNetworkInterceptPolicy(cfg));
+      if (policyResult) return policyResult;
+      if (!normalized.tabId) return textResult({ error: "route requires tabId" });
+      if (!normalized.pattern) return textResult({ error: "route requires pattern" });
+      const payload: Record<string, any> = {
+        pattern: normalized.pattern,
+        action: normalized.routeAction || "continue",
+      };
+      if (normalized.responseBody !== undefined) payload.body = normalized.responseBody;
+      if (normalized.contentType) payload.contentType = normalized.contentType;
+      if (typeof normalized.responseStatus === "number") payload.status = normalized.responseStatus;
+      if (normalized.resourceType) payload.resourceType = normalized.resourceType;
+      if (normalized.method) payload.method = normalized.method;
+      return textResult(await pinchtabFetch(cfg, `/tabs/${encodeURIComponent(normalized.tabId)}/network/route`, {
+        method: "POST",
+        body: payload,
+      }));
+    }
+
+    if (networkAction === "unroute") {
+      const policyResult = enforcePolicyOrReturn(checkNetworkInterceptPolicy(cfg));
+      if (policyResult) return policyResult;
+      if (!normalized.tabId) return textResult({ error: "unroute requires tabId" });
+      const query = new URLSearchParams();
+      if (normalized.pattern) query.set("pattern", normalized.pattern);
+      const qs = query.toString();
+      const path = `/tabs/${encodeURIComponent(normalized.tabId)}/network/route${qs ? `?${qs}` : ""}`;
+      return textResult(await pinchtabFetch(cfg, path, { method: "DELETE" }));
     }
 
     // list

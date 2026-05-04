@@ -27,8 +27,8 @@ CLI-first browser skill. Use `pinchtab` commands.
 
 ## Core Workflow
 
-1. Ensure the right server/profile/instance is active.
-2. Navigate: `pinchtab nav <url> --snap` — returns tab ID + interactive snapshot in one call.
+1. Ensure the right profile/instance is selected when needed.
+2. Navigate: `pinchtab nav <url> --snap` — auto-starts the local server if needed, then returns tab ID + interactive snapshot in one call.
 3. Interact: `pinchtab click <ref> --snap-diff` — returns OK + only changed elements (most token-efficient).
 4. For read-only observation: `pinchtab text` when you won't act on refs.
 
@@ -46,10 +46,11 @@ e12:textbox val="updated" [~]
 
 Fallback observation (when `--snap` wasn't used):
 - `pinchtab snap` — interactive elements + headings in compact format (default).
+- `pinchtab snap [selector]` — scope the current-tab snapshot to one element.
 - `pinchtab snap --full` — all nodes as JSON (for debugging).
 - `pinchtab text` — content only (use when snap is missing prose you need).
 
-Rules: never act on stale refs; screenshots only for visual/debug; choose the instance/profile up front for parallel or multi-site work.
+Rules: only `nav <url>` auto-starts the default local server; `snap`, `text`, `html`, `find`, and action commands operate on an already-running server/current tab. Explicit `--server` targets are never auto-started. Never act on stale refs; screenshots only for visual/debug; choose the instance/profile up front for parallel or multi-site work.
 
 ## Selectors
 
@@ -88,20 +89,23 @@ pinchtab --server http://localhost:9868 snap -i -c  # target a specific instance
 ### Navigation and tabs
 
 ```bash
-pinchtab nav <url>                                  # flags: --snap, --new-tab, --tab <id>, --block-images, --block-ads, --print-tab-id
+pinchtab nav <url>                                  # auto-starts default local server; flags: --snap, --new-tab, --tab <id>, --block-images, --block-ads, --print-tab-id
 pinchtab back | forward | reload                    # all support --snap, --snap-diff, --text
 pinchtab tab                                        # list tabs
 pinchtab tab <tab-id>                               # focus tab
-pinchtab tab new <url> | tab close <tab-id>
+pinchtab nav <url> --new-tab                        # force another tab
+pinchtab tab close <tab-id>
 pinchtab instance navigate <instance-id> <url>
 ```
 
-Tab state is automatic: `nav` persists the tab ID to a state file, and subsequent commands read it. No need for `export PINCHTAB_TAB=...` boilerplate. Just run `pinchtab nav URL` then `pinchtab snap -i -c` — the tab is remembered. For explicit control: `--tab <id>` flag or `PINCHTAB_TAB` env var override the state file.
+Tab state is automatic: `nav` persists the tab ID to a state file, and subsequent commands read it. Just run `pinchtab nav URL` then `pinchtab snap -i -c` — the tab is remembered. For explicit control, use `--tab <id>`.
+
+**Parallel agents**: when multiple agents share the same browser instance, the automatic tab state file becomes a race condition — one agent's `nav` overwrites another's tab ID. Each agent must manage its own tab ID explicitly: open with `nav <url> --new-tab`, capture the tab ID from the output, and pass `--tab <id>` on every subsequent command (`snap`, `click`, `fill`, `text`, `eval`, `press`, `scroll`, `frame`, etc.).
 
 ### Observation
 
 ```bash
-pinchtab snap                                       # default: compact + interactive; flags: --full (JSON), -d (diff), --selector <css>, --max-tokens <n>
+pinchtab snap [selector]                            # default: compact + interactive; flags: --full (JSON), -d (diff), --selector <css>, --max-tokens <n>
 pinchtab text                                       # Readability-filtered page text
 pinchtab text --full                                # raw document.body.innerText (alias: --raw)
 pinchtab text <selector>                            # ref / -s CSS / xpath:... — text from one element
@@ -156,8 +160,10 @@ Use for async DOM settling (spinners, toasts, XHR).
 ```bash
 pinchtab wait <selector>                            # default: visible; --state hidden to wait for disappear
 pinchtab wait --text "..." | --not-text "..."       # text appear / disappear
-pinchtab wait --url "**/dashboard" | --load networkidle
-pinchtab wait 500                                   # fixed ms delay (last resort)
+pinchtab wait --url "**/dashboard"                  # glob: **, *, ?
+pinchtab wait --load ready-state|content-loaded|network-idle
+pinchtab wait --fn "window.dataReady === true"      # requires security.allowEvaluate
+pinchtab wait 500                                   # fixed ms delay (last resort, max 30000ms)
 ```
 
 Timeout 10s default, 30s max via `--timeout <ms>`. Prefer `--not-text`/`--state hidden` over polling.

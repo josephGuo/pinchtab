@@ -36,7 +36,8 @@ cd "${TOOLS_DIR}"
 # so we don't clobber that setup by force-recreating without the overlay.
 if [[ -z "${BENCHMARK_SKIP_PINCHTAB_RESTART:-}" ]]; then
     echo "Ensuring pinchtab is running with pinchtab.json (production-faithful, idpi.wrapContent=true)..."
-    docker compose -f docker-compose.yml up -d --build --force-recreate --no-deps pinchtab
+    docker compose -f docker-compose.yml down --remove-orphans 2>/dev/null || true
+    docker compose -f docker-compose.yml up -d --build --force-recreate pinchtab
     sleep 15
 
     # Verify PinchTab is healthy

@@ -10,13 +10,14 @@ import "fmt"
 type Capability string
 
 const (
-	CapNone        Capability = ""
-	CapEvaluate    Capability = "evaluate"
-	CapMacro       Capability = "macro"
-	CapScreencast  Capability = "screencast"
-	CapDownload    Capability = "download"
-	CapUpload      Capability = "upload"
-	CapStateExport Capability = "stateExport"
+	CapNone             Capability = ""
+	CapEvaluate         Capability = "evaluate"
+	CapMacro            Capability = "macro"
+	CapScreencast       Capability = "screencast"
+	CapDownload         Capability = "download"
+	CapUpload           Capability = "upload"
+	CapStateExport      Capability = "stateExport"
+	CapNetworkIntercept Capability = "networkIntercept"
 )
 
 // Endpoint describes a single API route.
@@ -45,7 +46,7 @@ func (e Endpoint) TabRoute() string {
 // coreEndpoints is the canonical list of API endpoints.
 var coreEndpoints = []Endpoint{
 	// Navigation
-	{"POST", "/navigate", "Navigate to URL", CapNone, true},
+	{"POST", "/navigate", "Navigate URL or create tab", CapNone, true},
 	{"POST", "/back", "Go back", CapNone, true},
 	{"POST", "/forward", "Go forward", CapNone, true},
 	{"POST", "/reload", "Reload page", CapNone, true},
@@ -56,6 +57,10 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/frame", "Set current frame scope", CapNone, true},
 	{"GET", "/screenshot", "Page screenshot", CapNone, true},
 	{"GET", "/text", "Extract page text", CapNone, true},
+	{"GET", "/title", "Read page title", CapNone, true},
+	{"GET", "/url", "Read page URL", CapNone, true},
+	{"GET", "/html", "Read page HTML", CapNone, true},
+	{"GET", "/styles", "Read computed styles", CapNone, true},
 	{"GET", "/pdf", "Export as PDF (GET)", CapNone, true},
 	{"POST", "/pdf", "Export as PDF (POST)", CapNone, true},
 
@@ -67,7 +72,7 @@ var coreEndpoints = []Endpoint{
 	{"POST", "/find", "Find elements", CapNone, true},
 
 	// Tab management
-	{"POST", "/tab", "Open or switch tab", CapNone, false},
+	{"POST", "/tab", "Create or focus tab", CapNone, false},
 	{"POST", "/close", "Close tab", CapNone, true},
 	{"POST", "/lock", "Lock tab", CapNone, true},
 	{"POST", "/unlock", "Unlock tab", CapNone, true},
@@ -91,6 +96,9 @@ var coreEndpoints = []Endpoint{
 	{"GET", "/network/export/stream", "Export HAR stream", CapNone, true},
 	{"GET", "/network/{requestId}", "Single network request", CapNone, true},
 	{"POST", "/network/clear", "Clear network log", CapNone, false},
+	{"GET", "/network/route", "List interception rules for a tab", CapNetworkIntercept, true},
+	{"POST", "/network/route", "Install an interception rule", CapNetworkIntercept, true},
+	{"DELETE", "/network/route", "Remove interception rule(s)", CapNetworkIntercept, true},
 
 	// Console & errors
 	{"GET", "/console", "Console logs", CapNone, false},

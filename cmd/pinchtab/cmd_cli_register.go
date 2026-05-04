@@ -38,6 +38,10 @@ func registerBrowserCommands() {
 		evalCmd,
 		pdfCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		stylesCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -57,22 +61,25 @@ func registerBrowserCommands() {
 		cacheCmd,
 		storageCmd,
 		stateCmd,
+		closeCmd,
+		tabCloseCmd,
+		handoffCmd,
 		tabHandoffCmd,
+		resumeCmd,
 		tabResumeCmd,
+		handoffStatusCmd,
 		tabHandoffStatusCmd,
 	)
 
-	// Register handoff/resume/handoff-status as subcommands of `tab` too so
-	// `pinchtab tab handoff <id>` keeps working alongside the top-level
-	// `pinchtab handoff`. The commands carry GroupID="browser" (set by
-	// setCommandGroup above) — add the same group to tabsCmd so cobra
-	// accepts them without panicking.
+	// These commands carry GroupID="browser" (set by setCommandGroup above).
+	// Add the same group to tabsCmd so cobra accepts grouped tab subcommands.
 	tabsCmd.AddGroup(&cobra.Group{ID: "browser", Title: "Browser"})
-	tabsCmd.AddCommand(tabNewCmd, tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
+	tabsCmd.AddCommand(tabCloseCmd, tabHandoffCmd, tabResumeCmd, tabHandoffStatusCmd)
 	clipboardCmd.AddCommand(clipboardReadCmd, clipboardWriteCmd, clipboardCopyCmd, clipboardPasteCmd)
 	keyboardCmd.AddCommand(keyboardTypeCmd, keyboardInsertTextCmd)
 	dialogCmd.AddCommand(dialogAcceptCmd, dialogDismissCmd)
 	mouseCmd.AddCommand(mouseMoveCmd, mouseDownCmd, mouseUpCmd, mouseWheelCmd)
+	networkCmd.AddCommand(networkRouteCmd, networkUnrouteCmd)
 
 	configureBrowserFlags()
 
@@ -99,6 +106,10 @@ func registerBrowserCommands() {
 		evalCmd,
 		pdfCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		stylesCmd,
 		downloadCmd,
 		uploadCmd,
 		findCmd,
@@ -118,9 +129,10 @@ func registerBrowserCommands() {
 		cacheCmd,
 		storageCmd,
 		stateCmd,
-		tabHandoffCmd,
-		tabResumeCmd,
-		tabHandoffStatusCmd,
+		closeCmd,
+		handoffCmd,
+		resumeCmd,
+		handoffStatusCmd,
 	)
 }
 
@@ -147,26 +159,35 @@ func configureBrowserFlags() {
 	clickCmd.Flags().Bool("text", false, "Output page text after action (for verification)")
 	clickCmd.Flags().String("dialog-action", "", "Auto-handle a JS dialog opened by the click: accept | dismiss")
 	clickCmd.Flags().String("dialog-text", "", "Prompt response text (with --dialog-action accept on prompt())")
+	clickCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	dblclickCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(dblclickCmd, "dblclick")
+	dblclickCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	hoverCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(hoverCmd, "hover")
+	hoverCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	mouseMoveCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(mouseMoveCmd, bridge.ActionMouseMove)
+	mouseMoveCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	mouseDownCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(mouseDownCmd, bridge.ActionMouseDown)
 	mouseDownCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
+	mouseDownCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	mouseUpCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(mouseUpCmd, bridge.ActionMouseUp)
 	mouseUpCmd.Flags().String("button", "left", "Mouse button: left, right, middle")
+	mouseUpCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
 
 	mouseWheelCmd.Flags().String("css", "", "CSS selector instead of ref")
 	addPointFlags(mouseWheelCmd, bridge.ActionMouseWheel)
+	mouseWheelCmd.Flags().Bool("humanize", false, "Use humanized bezier+jitter input path (overrides instance config)")
+
+	typeCmd.Flags().Bool("humanize", false, "Use humanized per-character keypress timing (overrides instance config)")
 	mouseWheelCmd.Flags().Int("dx", 0, "Wheel delta X")
 	mouseWheelCmd.Flags().Int("dy", 0, "Wheel delta Y")
 
@@ -218,6 +239,18 @@ func configureBrowserFlags() {
 	textCmd.Flags().String("frame", "", "Extract text from a specific iframe by frameId. If unset, uses the tab's active frame scope (set via `pinchtab frame`) or the top-level document.")
 	textCmd.Flags().StringP("selector", "s", "", "Element selector to extract text from (ref/CSS/XPath/text)")
 	textCmd.Flags().Bool("json", false, "Output full JSON response instead of just text content")
+	titleCmd.Flags().String("frame", "", "Read title from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	titleCmd.Flags().Bool("json", false, "Output full JSON response instead of just title")
+	urlCmd.Flags().String("frame", "", "Read URL from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	urlCmd.Flags().Bool("json", false, "Output full JSON response instead of just URL")
+	htmlCmd.Flags().String("frame", "", "Read HTML from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	htmlCmd.Flags().StringP("selector", "s", "", "Element selector to extract HTML from (ref/CSS/XPath/text)")
+	htmlCmd.Flags().String("max-chars", "", "Maximum number of HTML characters to return")
+	htmlCmd.Flags().Bool("json", false, "Output full JSON response instead of just HTML")
+	stylesCmd.Flags().String("frame", "", "Read computed styles from a specific iframe by frameId. If unset, uses the tab's active frame scope or top-level document.")
+	stylesCmd.Flags().StringP("selector", "s", "", "Element selector to extract styles from (ref/CSS/XPath/text). If omitted, returns computed styles for the root element.")
+	stylesCmd.Flags().String("prop", "", "Return only a single computed style property")
+	stylesCmd.Flags().Bool("json", false, "Output full JSON response instead of just styles")
 
 	navCmd.Flags().Bool("new-tab", false, "Open in new tab")
 	navCmd.Flags().Bool("block-images", false, "Block image loading")
@@ -254,6 +287,10 @@ func configureBrowserFlags() {
 		pdfCmd,
 		findCmd,
 		textCmd,
+		titleCmd,
+		urlCmd,
+		htmlCmd,
+		stylesCmd,
 		clickCmd,
 		dblclickCmd,
 		hoverCmd,
@@ -284,9 +321,13 @@ func configureBrowserFlags() {
 
 	evalCmd.Flags().Bool("await-promise", false, "Resolve a returned Promise before responding")
 	navCmd.Flags().Bool("print-tab-id", false, "Print only the tab ID on stdout (also triggered automatically when stdout is a pipe)")
-	tabHandoffCmd.Flags().String("reason", "", "Reason for human handoff (default: manual_handoff)")
-	tabHandoffCmd.Flags().Int("timeout-ms", 0, "Optional auto-resume timeout in milliseconds")
-	tabResumeCmd.Flags().String("status", "", "Optional resume status note (e.g. completed, failed)")
+	for _, cmd := range []*cobra.Command{handoffCmd, tabHandoffCmd} {
+		cmd.Flags().String("reason", "", "Reason for human handoff (default: manual_handoff)")
+		cmd.Flags().Int("timeout-ms", 0, "Optional auto-resume timeout in milliseconds")
+	}
+	for _, cmd := range []*cobra.Command{resumeCmd, tabResumeCmd} {
+		cmd.Flags().String("status", "", "Optional resume status note (e.g. completed, failed)")
+	}
 
 	// Add --json flag to action commands (default is terse output)
 	addJSONFlag(
@@ -317,10 +358,13 @@ func configureBrowserFlags() {
 		findCmd,
 		evalCmd,
 		tabsCmd,
-		tabNewCmd,
+		closeCmd,
 		tabCloseCmd,
+		handoffCmd,
 		tabHandoffCmd,
+		resumeCmd,
 		tabResumeCmd,
+		handoffStatusCmd,
 		tabHandoffStatusCmd,
 		healthCmd,
 		cacheClearCmd,
@@ -330,6 +374,15 @@ func configureBrowserFlags() {
 	)
 
 	scrollintoviewCmd.Flags().String("css", "", "CSS selector instead of ref")
+
+	networkRouteCmd.Flags().Bool("abort", false, "Block matching requests instead of letting them through")
+	networkRouteCmd.Flags().String("body", "", "Fulfill matching requests with this JSON body (mutually exclusive with --abort)")
+	networkRouteCmd.Flags().String("resource-type", "", "Limit to a CDP resource category (e.g. script, image, xhr, fetch)")
+	networkRouteCmd.Flags().String("content-type", "", "(With --body) Response Content-Type (default application/json)")
+	networkRouteCmd.Flags().Int("status", 0, "(With --body) Response status code (default 200)")
+	networkRouteCmd.Flags().String("method", "", "Limit to an HTTP method (GET, POST, ...). Fulfill rules without --method skip OPTIONS preflights to avoid breaking CORS.")
+	addTabFlag(networkRouteCmd, networkUnrouteCmd)
+	addJSONFlag(networkRouteCmd, networkUnrouteCmd)
 
 	networkCmd.Flags().String("filter", "", "URL pattern filter")
 	networkCmd.Flags().String("method", "", "HTTP method filter (GET, POST, etc)")
@@ -381,35 +434,28 @@ func addRootCommands(cmds ...*cobra.Command) {
 	rootCmd.AddCommand(cmds...)
 }
 
-// addTabFlag wires a --tab flag onto the given commands and defaults its
-// value from (in priority order): $PINCHTAB_TAB env var, or the state file
-// written by `nav`. This lets agents avoid threading `--tab "$TAB"` through
-// every command:
+// addTabFlag wires a --tab flag onto the given commands and defaults its value
+// from the state file written by `nav`. This lets agents avoid threading
+// `--tab "$TAB"` through every command:
 //
 //	pinchtab nav http://example.com   # writes tab ID to state file
 //	pinchtab snap -i -c               # auto-reads from state file
 //
-// Explicit --tab still wins (cobra flag precedence). If neither env var nor
-// state file is set, the server picks the active tab as before.
-// resolveTabArg returns the tab ID from args[0] when present, otherwise falls
-// back to $PINCHTAB_TAB then the persisted state file written by `nav`.
+// Explicit --tab still wins (cobra flag precedence). If no state file is set,
+// the server picks the active tab as before.
+// resolveTabArg returns the tab ID from args[0] when present, otherwise it
+// falls back to the persisted state file written by `nav`.
 func resolveTabArg(args []string) string {
 	if len(args) > 0 && args[0] != "" {
 		return args[0]
-	}
-	if env := os.Getenv("PINCHTAB_TAB"); env != "" {
-		return env
 	}
 	return readTabStateFile()
 }
 
 func addTabFlag(cmds ...*cobra.Command) {
-	defaultTab := os.Getenv("PINCHTAB_TAB")
-	if defaultTab == "" {
-		defaultTab = readTabStateFile()
-	}
+	defaultTab := readTabStateFile()
 	for _, cmd := range cmds {
-		cmd.Flags().String("tab", defaultTab, "Tab ID (env: PINCHTAB_TAB)")
+		cmd.Flags().String("tab", defaultTab, "Tab ID")
 	}
 }
 
@@ -441,6 +487,15 @@ func WriteTabStateFile(tabID string) {
 	path := tabStateFile()
 	_ = os.MkdirAll(filepath.Dir(path), 0755)
 	_ = os.WriteFile(path, []byte(tabID+"\n"), 0644)
+}
+
+// ClearTabStateFileIfCurrent clears the current-tab state when the saved tab is
+// known to have been closed.
+func ClearTabStateFileIfCurrent(tabID string) {
+	if tabID == "" || readTabStateFile() != tabID {
+		return
+	}
+	_ = os.Remove(tabStateFile())
 }
 
 func addJSONFlag(cmds ...*cobra.Command) {

@@ -33,9 +33,10 @@ echo -e "  ${INFO}Running pre-push checks (matches GitHub Actions CI)...${NC}"
 
 section "Format"
 
-mapfile -t go_files < <(git ls-files -- '*.go' | while read -r file; do
-  [ -f "$file" ] && printf '%s\n' "$file"
-done)
+go_files=()
+while IFS= read -r file; do
+  [ -f "$file" ] && go_files+=("$file")
+done < <(git ls-files -- '*.go')
 unformatted=""
 if [ ${#go_files[@]} -gt 0 ]; then
   unformatted=$(gofmt -l "${go_files[@]}")
@@ -92,16 +93,18 @@ elif [ -x "/usr/local/bin/golangci-lint" ]; then
   LINT_CMD="/usr/local/bin/golangci-lint"
 fi
 
-if [ -n "$LINT_CMD" ]; then
-  if ! $LINT_CMD run ./...; then
-    fail "golangci-lint"
-    exit 1
-  fi
-  ok "golangci-lint"
-else
-  echo -e "  ${ACCENT}·${NC} golangci-lint not installed — skipping"
+if [ -z "$LINT_CMD" ]; then
+  fail "golangci-lint" "Required locally because CI runs golangci-lint."
   hint "Install: brew install golangci-lint"
+  hint "Or: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest"
+  exit 1
 fi
+
+if ! $LINT_CMD run; then
+  fail "golangci-lint"
+  exit 1
+fi
+ok "golangci-lint"
 
 # ── Summary ──────────────────────────────────────────────────────────
 

@@ -5,8 +5,8 @@ Navigate to `http://fixtures/iframe.html` and extract content from inside the em
 
 **Verify**: The iframe's inner content includes `IFRAME_INNER_CONTENT_LOADED`.
 
-### 19.2 Type into iframe input (native frame scope)
-Use `pinchtab frame '#content-frame'` to scope into the iframe, then `fill` the input with "Hello World" and `click` the Save button. Verify via a scoped `snap` — `text --full` doesn't pierce iframes. Reset with `pinchtab frame main` afterwards.
+### 19.2 Interact with iframe form
+Scope into the embedded iframe, fill the input with "Hello World" and submit. Note that `text` does not pierce iframes — use a scoped observation instead. Reset frame scope when done.
 
 **Verify**: Scoped snapshot contains `IFRAME_INPUT_RECEIVED_HELLO_WORLD`.
 

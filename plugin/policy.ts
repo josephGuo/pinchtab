@@ -48,6 +48,13 @@ export function checkUploadPolicy(cfg: PluginConfig): { allowed: boolean; error?
   return { allowed: true };
 }
 
+export function checkNetworkInterceptPolicy(cfg: PluginConfig): { allowed: boolean; error?: string } {
+  if (cfg.allowNetworkIntercept !== true) {
+    return { allowed: false, error: "network interception blocked by plugin policy (allowNetworkIntercept: false)" };
+  }
+  return { allowed: true };
+}
+
 export function enforcePolicyOrReturn(check: { allowed: boolean; error?: string }): any | null {
   if (!check.allowed) {
     return textResult({ error: check.error });

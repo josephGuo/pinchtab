@@ -105,8 +105,13 @@ end_test
 # ─────────────────────────────────────────────────────────────────
 start_test "plugin: wait for text"
 
-pt_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"text\":\"Click me\"}"
+if [ -z "${TAB_ID:-}" ]; then
+  pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/buttons.html\"}"
+  TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
+fi
+pt_post /wait -d "{\"tabId\":\"${TAB_ID}\",\"text\":\"Increment\",\"timeout\":1000}"
 assert_ok "wait for text"
+assert_json_eq "$RESULT" '.waited' 'true' "text was found before timeout"
 
 end_test
 
@@ -120,7 +125,7 @@ assert_json_length_gte "$RESULT" '.' 1 "has at least one tab"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "plugin: tab new"
+start_test "plugin: /tab action=new"
 
 pt_post /tab -d '{"action":"new"}'
 assert_ok "new tab"
@@ -142,7 +147,6 @@ start_test "plugin: evaluate JavaScript"
 
 pt_post /navigate -d "{\"url\":\"${FIXTURES_URL}/evaluate.html\"}"
 TAB_ID=$(echo "$RESULT" | jq -r '.tabId')
-sleep 1
 
 pt_post /evaluate -d "{\"tabId\":\"${TAB_ID}\",\"expression\":\"document.title\"}"
 assert_ok "evaluate"

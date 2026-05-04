@@ -2,12 +2,16 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestDefaultFileConfig(t *testing.T) {
 	fc := DefaultFileConfig()
+	if fc.Schema != CurrentConfigSchemaURL() {
+		t.Errorf("DefaultFileConfig.Schema = %q, want %q", fc.Schema, CurrentConfigSchemaURL())
+	}
 	if fc.Server.Port != "9867" {
 		t.Errorf("DefaultFileConfig.Server.Port = %v, want 9867", fc.Server.Port)
 	}
@@ -128,6 +132,65 @@ func TestDefaultFileConfig(t *testing.T) {
 	}
 }
 
+func TestConfigSchemaURLFallsBackToLatestWhenNoPublishedSchemaMatches(t *testing.T) {
+	originalPublished := publishedConfigSchemaVersions
+	t.Cleanup(func() {
+		publishedConfigSchemaVersions = originalPublished
+		SetConfigSchemaVersion("dev")
+	})
+
+	publishedConfigSchemaVersions = nil
+
+	SetConfigSchemaVersion("1.2.3")
+	if got := CurrentConfigSchemaURL(); got != ConfigSchemaURL {
+		t.Fatalf("unpublished CurrentConfigSchemaURL() = %q, want latest %q", got, ConfigSchemaURL)
+	}
+	if fc := DefaultFileConfig(); fc.Schema != ConfigSchemaURL {
+		t.Fatalf("DefaultFileConfig().Schema = %q, want latest %q", fc.Schema, ConfigSchemaURL)
+	}
+
+	SetConfigSchemaVersion("dev")
+	if got := CurrentConfigSchemaURL(); got != ConfigSchemaURL {
+		t.Fatalf("dev CurrentConfigSchemaURL() = %q, want %q", got, ConfigSchemaURL)
+	}
+}
+
+func TestConfigSchemaURLUsesClosestOlderOrEqualPublishedSchema(t *testing.T) {
+	originalPublished := publishedConfigSchemaVersions
+	t.Cleanup(func() {
+		publishedConfigSchemaVersions = originalPublished
+		SetConfigSchemaVersion("dev")
+	})
+
+	publishedConfigSchemaVersions = []string{"1.2.3", "1.4.0", "2.0.0"}
+
+	SetConfigSchemaVersion("1.2.3")
+	wantReleaseURL := "https://raw.githubusercontent.com/pinchtab/pinchtab/v1.2.3/schema/config.json"
+	if got := CurrentConfigSchemaURL(); got != wantReleaseURL {
+		t.Fatalf("CurrentConfigSchemaURL() = %q, want %q", got, wantReleaseURL)
+	}
+	if fc := DefaultFileConfig(); fc.Schema != wantReleaseURL {
+		t.Fatalf("DefaultFileConfig().Schema = %q, want %q", fc.Schema, wantReleaseURL)
+	}
+
+	SetConfigSchemaVersion("1.3.0")
+	wantClosestOlderURL := "https://raw.githubusercontent.com/pinchtab/pinchtab/v1.2.3/schema/config.json"
+	if got := CurrentConfigSchemaURL(); got != wantClosestOlderURL {
+		t.Fatalf("closest older CurrentConfigSchemaURL() = %q, want %q", got, wantClosestOlderURL)
+	}
+
+	SetConfigSchemaVersion("1.1.0")
+	if got := CurrentConfigSchemaURL(); got != ConfigSchemaURL {
+		t.Fatalf("older than first published CurrentConfigSchemaURL() = %q, want latest %q", got, ConfigSchemaURL)
+	}
+
+	SetConfigSchemaVersion("2.1.0")
+	wantLatestPublishedURL := "https://raw.githubusercontent.com/pinchtab/pinchtab/v2.0.0/schema/config.json"
+	if got := CurrentConfigSchemaURL(); got != wantLatestPublishedURL {
+		t.Fatalf("newer than published CurrentConfigSchemaURL() = %q, want %q", got, wantLatestPublishedURL)
+	}
+}
+
 // TestIsLegacyConfig tests the format detection logic.
 func TestIsLegacyConfig(t *testing.T) {
 	tests := []struct {
@@ -219,18 +282,18 @@ func TestConvertLegacyConfig(t *testing.T) {
 
 func TestTabPolicyDefaultsFromRuntime(t *testing.T) {
 	if got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
-		TabLifecyclePolicy: "close_idle",
+		TabLifecyclePolicy: "keep",
 		TabCloseDelay:      5 * time.Minute,
 	}); got != nil {
-		t.Fatalf("default close_idle/5m policy should not be emitted; got %#v", got)
+		t.Fatalf("default keep policy should not be emitted; got %#v", got)
 	}
 
 	got := tabPolicyDefaultsFromRuntime(&RuntimeConfig{
-		TabLifecyclePolicy: "keep",
+		TabLifecyclePolicy: "close_idle",
 		TabCloseDelay:      5 * time.Minute,
 	})
-	if got == nil || got.Lifecycle != "keep" || got.CloseDelaySec != nil {
-		t.Fatalf("keep policy = %#v, want lifecycle=keep without delay", got)
+	if got == nil || got.Lifecycle != "close_idle" || got.CloseDelaySec != nil {
+		t.Fatalf("close_idle implicit-delay policy = %#v, want lifecycle=close_idle without delay", got)
 	}
 
 	got = tabPolicyDefaultsFromRuntime(&RuntimeConfig{
@@ -256,6 +319,12 @@ func TestDefaultFileConfigJSON(t *testing.T) {
 		t.Fatalf("failed to unmarshal DefaultFileConfig output: %v", err)
 	}
 
+	if !strings.HasPrefix(string(data), "{\n  \"$schema\": ") {
+		t.Fatalf("DefaultFileConfig JSON should start with $schema, got:\n%s", data)
+	}
+	if parsed.Schema != CurrentConfigSchemaURL() {
+		t.Errorf("round-trip Schema = %q, want %q", parsed.Schema, CurrentConfigSchemaURL())
+	}
 	if parsed.Server.Port != "9867" {
 		t.Errorf("round-trip Server.Port = %v, want 9867", parsed.Server.Port)
 	}

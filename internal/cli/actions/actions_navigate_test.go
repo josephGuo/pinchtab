@@ -2,6 +2,7 @@ package actions
 
 import (
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -35,6 +36,66 @@ func TestNavigate(t *testing.T) {
 	_ = json.Unmarshal([]byte(m.lastBody), &body)
 	if body["url"] != "https://pinchtab.com" {
 		t.Errorf("expected url=https://pinchtab.com, got %v", body["url"])
+	}
+}
+
+func TestNavigateReusesImplicitTabWhenItExists(t *testing.T) {
+	m := newMockServer()
+	m.response = `{"tabId":"ABC123","status":"ok"}`
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newNavigateCmd()
+	cmd.Flags().Lookup("tab").DefValue = "ABC123"
+	_ = cmd.Flags().Set("tab", "ABC123")
+	cmd.Flags().Lookup("tab").Changed = false
+
+	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+
+	if len(m.requests) != 1 {
+		t.Fatalf("requests = %d, want 1", len(m.requests))
+	}
+	if m.requests[0].Path != "/tabs/ABC123/navigate" {
+		t.Fatalf("navigate path = %q, want /tabs/ABC123/navigate", m.requests[0].Path)
+	}
+}
+
+func TestNavigateFallsBackToNewTabForStaleImplicitTab(t *testing.T) {
+	m := newMockServer()
+	m.setResponse(http.MethodPost, "/tabs/STALE123/navigate", http.StatusNotFound, `{"error":"tab not found"}`)
+	m.setResponse(http.MethodPost, "/navigate", http.StatusOK, `{"tabId":"NEW123","status":"ok"}`)
+	defer m.close()
+	client := m.server.Client()
+
+	cmd := newNavigateCmd()
+	cmd.Flags().Lookup("tab").DefValue = "STALE123"
+	_ = cmd.Flags().Set("tab", "STALE123")
+	cmd.Flags().Lookup("tab").Changed = false
+
+	Navigate(client, m.base(), "", "https://pinchtab.com", cmd)
+
+	if len(m.requests) != 2 {
+		t.Fatalf("requests = %d, want 2", len(m.requests))
+	}
+	if m.requests[0].Path != "/tabs/STALE123/navigate" {
+		t.Fatalf("first request path = %q, want /tabs/STALE123/navigate", m.requests[0].Path)
+	}
+	if m.requests[1].Path != "/navigate" {
+		t.Fatalf("navigate path = %q, want /navigate", m.requests[1].Path)
+	}
+}
+
+func TestBuildNavigateRequestDoesNotFallbackForExplicitTab(t *testing.T) {
+	cmd := newNavigateCmd()
+	_ = cmd.Flags().Set("tab", "EXPLICIT123")
+
+	req := buildNavigateRequest("https://pinchtab.com", cmd)
+
+	if req.path != "/tabs/EXPLICIT123/navigate" {
+		t.Fatalf("path = %q, want /tabs/EXPLICIT123/navigate", req.path)
+	}
+	if req.fallbackOnNotFound {
+		t.Fatal("explicit --tab should not fallback on 404")
 	}
 }
 

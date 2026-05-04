@@ -7,11 +7,16 @@ import (
 )
 
 var snapCmd = &cobra.Command{
-	Use:   "snap",
+	Use:   "snap [selector]",
 	Short: "Snapshot accessibility tree",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		selector := ""
+		if len(args) > 0 && stringFlag(cmd, "selector") == "" {
+			selector = args[0]
+		}
 		runCLI(func(rt cliRuntime) {
-			browseractions.Snapshot(rt.client, rt.base, rt.token, cmd)
+			browseractions.Snapshot(rt.client, rt.base, rt.token, cmd, selector)
 		})
 	},
 }
@@ -65,6 +70,48 @@ var textCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		runCLI(func(rt cliRuntime) {
 			browseractions.Text(rt.client, rt.base, rt.token, cmd, args)
+		})
+	},
+}
+
+var titleCmd = &cobra.Command{
+	Use:   "title",
+	Short: "Get the current tab title",
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.Title(rt.client, rt.base, rt.token, cmd)
+		})
+	},
+}
+
+var urlCmd = &cobra.Command{
+	Use:   "url",
+	Short: "Get the current tab URL",
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.URL(rt.client, rt.base, rt.token, cmd)
+		})
+	},
+}
+
+var htmlCmd = &cobra.Command{
+	Use:   "html [selector]",
+	Short: "Get document or element HTML",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.HTML(rt.client, rt.base, rt.token, cmd, args)
+		})
+	},
+}
+
+var stylesCmd = &cobra.Command{
+	Use:   "styles [selector]",
+	Short: "Get computed styles for the root element or a matched element",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		runCLI(func(rt cliRuntime) {
+			browseractions.Styles(rt.client, rt.base, rt.token, cmd, args)
 		})
 	},
 }

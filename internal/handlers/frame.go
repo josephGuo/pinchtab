@@ -58,9 +58,20 @@ func (h *Handlers) scopeSnapshotNodesByFrame(nodes []bridge.RawAXNode, frameID s
 }
 
 func (h *Handlers) resolveSelectorNodeID(ctx context.Context, tabID, raw string) (int64, error) {
+	return h.resolveSelectorNodeIDInFrame(ctx, tabID, raw, "")
+}
+
+func (h *Handlers) resolveSelectorNodeIDInFrame(ctx context.Context, tabID, raw, frameID string) (int64, error) {
 	sel := selector.Parse(raw)
 	cache := h.Bridge.GetRefCache(tabID)
-	return bridge.ResolveUnifiedSelectorInFrame(ctx, sel, cache, h.selectorFrameID(tabID))
+	if frameID == "" {
+		frameID = h.selectorFrameID(tabID)
+	}
+	req := bridge.ActionRequest{}
+	if handled, err := h.applySemanticActionSelectorInFrame(ctx, tabID, frameID, sel, &req); handled {
+		return req.NodeID, err
+	}
+	return bridge.ResolveUnifiedSelectorInFrame(ctx, sel, cache, frameID)
 }
 
 func ownerRefForFrame(cache *bridge.RefCache, frameID string) string {
@@ -283,7 +294,10 @@ func (h *Handlers) resolveFrameScope(ctx context.Context, tabID, target string) 
 	}
 
 	switch sel.Kind {
-	case selector.KindCSS, selector.KindXPath, selector.KindText:
+	case selector.KindCSS, selector.KindXPath, selector.KindText,
+		selector.KindRole, selector.KindLabel, selector.KindPlaceholder,
+		selector.KindAlt, selector.KindTitle, selector.KindTestID,
+		selector.KindFirst, selector.KindLast, selector.KindNth:
 		nodeID, err := h.resolveSelectorNodeID(ctx, tabID, target)
 		if err != nil {
 			return bridge.FrameScope{}, false, err

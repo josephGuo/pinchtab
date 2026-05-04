@@ -161,13 +161,34 @@ assert_output_contains "Welcome" "extracts text from element"
 end_test
 
 # ─────────────────────────────────────────────────────────────────
+start_test "pinchtab title url html styles"
+
+pt_ok nav "${FIXTURES_URL}/table.html"
+TAB_ID=$(echo "$PT_OUT" | tr -d '[:space:]')
+
+pt_ok title --tab "$TAB_ID"
+assert_output_contains "E2E Test - Table" "returns page title"
+
+pt_ok url --tab "$TAB_ID"
+assert_output_contains "table.html" "returns page url"
+
+pt_ok html "#data-table" --tab "$TAB_ID"
+assert_output_contains "<table id=\"data-table\">" "returns selected table html"
+assert_output_contains "Alice Johnson" "html contains table row content"
+
+pt_ok styles ".status-active" --prop display --tab "$TAB_ID"
+assert_output_contains "inline-block" "returns computed display property"
+
+end_test
+
+# ─────────────────────────────────────────────────────────────────
 start_test "pinchtab text <ref>"
 
 pt_ok nav "${FIXTURES_URL}/index.html"
 # -i keeps the interactive filter; --compact=false forces JSON for jq parsing
 pt_ok snap -i --compact=false
 # Extract a ref from the snapshot (first link)
-REF=$(echo "$PT_OUT" | safe_jq -r '.nodes[] | select(.role == "link") | .ref' | head -1)
+REF=$(echo "$PT_OUT" | safe_jq -r '[.nodes[] | select(.role == "link") | .ref] | first // empty' 2>/dev/null || true)
 if [ -n "$REF" ] && [ "$REF" != "null" ]; then
   pt_ok text "$REF"
   # Default output is plain text
@@ -187,9 +208,9 @@ end_test
 # end_test
 
 # ─────────────────────────────────────────────────────────────────
-start_test "pinchtab quick <url>"
+start_test "pinchtab nav <url> --snap"
 
-pt_ok quick "${FIXTURES_URL}/form.html"
+pt_ok nav "${FIXTURES_URL}/form.html" --snap
 assert_output_contains "nodes" "returns snapshot nodes"
 assert_output_contains "form.html" "navigated to correct page"
 

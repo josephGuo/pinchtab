@@ -11,6 +11,7 @@ export interface PluginConfig {
   allowedDomains?: string[];
   allowDownloads?: boolean;
   allowUploads?: boolean;
+  allowNetworkIntercept?: boolean;
   defaultSnapshotFormat?: string;
   defaultSnapshotFilter?: string;
   screenshotFormat?: string;

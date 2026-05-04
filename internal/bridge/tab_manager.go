@@ -29,6 +29,7 @@ type TabManager struct {
 	onAfterClose func() // optional: invoked after any successful CloseTab
 	dialogMgr    *DialogManager
 	logStore     *ConsoleLogStore
+	routeMgr     *RouteManager
 	netMonitor   *NetworkMonitor
 	currentTab   string // ID of the most recently used tab
 	executor     *TabExecutor
@@ -75,6 +76,13 @@ func (tm *TabManager) SetOnAfterClose(fn func()) {
 // SetNetworkMonitor sets the network monitor for eager network capture on new tabs.
 func (tm *TabManager) SetNetworkMonitor(nm *NetworkMonitor) {
 	tm.netMonitor = nm
+}
+
+// SetRouteManager registers the per-bridge RouteManager so the cleanup path
+// can drop a tab's interception state when the tab closes (mirrors the
+// network-monitor / log-store / executor cleanup hooks in tab_cleanup.go).
+func (tm *TabManager) SetRouteManager(rm *RouteManager) {
+	tm.routeMgr = rm
 }
 
 // browserExecutorContext returns a context bound to the top-level browser
@@ -126,7 +134,7 @@ func (tm *TabManager) CreateTab(url string) (string, context.Context, context.Ca
 	// Use target.CreateTarget CDP protocol call to create a new tab.
 	// This works for both local and remote (CDP_URL) allocators.
 	var targetID target.ID
-	createCtx, createCancel := context.WithTimeout(tm.browserCtx, 10*time.Second)
+	createCtx, createCancel := context.WithTimeout(tm.browserCtx, 30*time.Second)
 	if err := chromedp.Run(createCtx,
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error

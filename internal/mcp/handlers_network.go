@@ -75,3 +75,64 @@ func handleNetworkClear(c *Client) func(context.Context, mcp.CallToolRequest) (*
 		return resultFromBytes(body, code)
 	}
 }
+
+func handleNetworkRoute(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		tabID, err := r.RequireString("tabId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		pattern, err := r.RequireString("pattern")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+
+		payload := map[string]any{"pattern": pattern}
+		if action := optString(r, "action"); action != "" {
+			payload["action"] = action
+		} else {
+			payload["action"] = "continue"
+		}
+		if body := optString(r, "body"); body != "" {
+			payload["body"] = body
+		}
+		if ct := optString(r, "contentType"); ct != "" {
+			payload["contentType"] = ct
+		}
+		if rt := optString(r, "resourceType"); rt != "" {
+			payload["resourceType"] = rt
+		}
+		if status, ok := optInt(r, "status"); ok {
+			payload["status"] = status
+		}
+		if method := optString(r, "method"); method != "" {
+			payload["method"] = method
+		}
+
+		path := "/tabs/" + url.PathEscape(tabID) + "/network/route"
+		respBody, code, err := c.Post(ctx, path, payload)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(respBody, code)
+	}
+}
+
+func handleNetworkUnroute(c *Client) func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, r mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		tabID, err := r.RequireString("tabId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		q := url.Values{}
+		if pattern := optString(r, "pattern"); pattern != "" {
+			q.Set("pattern", pattern)
+		}
+		path := "/tabs/" + url.PathEscape(tabID) + "/network/route"
+		respBody, code, err := c.Delete(ctx, path, q)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return resultFromBytes(respBody, code)
+	}
+}

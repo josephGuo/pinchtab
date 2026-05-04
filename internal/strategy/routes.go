@@ -22,6 +22,8 @@ func capabilitySetting(cap routes.Capability) (feature, setting, code string) {
 		return "upload", "security.allowUpload", "upload_disabled"
 	case routes.CapStateExport:
 		return "stateExport", "security.allowStateExport", "state_export_disabled"
+	case routes.CapNetworkIntercept:
+		return "networkIntercept", "security.allowNetworkIntercept", "network_intercept_disabled"
 	default:
 		return string(cap), "security.allow" + string(cap), string(cap) + "_disabled"
 	}

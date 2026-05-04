@@ -81,16 +81,7 @@ func New(b bridge.BridgeAPI, cfg *config.RuntimeConfig, p bridge.ProfileService,
 		// DescriptorBuilder
 		func(tabID string) []semantic.ElementDescriptor {
 			nodes := h.resolveSnapshotNodes(tabID)
-			descs := make([]semantic.ElementDescriptor, len(nodes))
-			for i, n := range nodes {
-				descs[i] = semantic.ElementDescriptor{
-					Ref:   n.Ref,
-					Role:  n.Role,
-					Name:  n.Name,
-					Value: n.Value,
-				}
-			}
-			return descs
+			return semanticDescriptorsFromNodes(nodes)
 		},
 	)
 
@@ -203,6 +194,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("POST /tabs/{id}/resume", h.HandleTabResume)
 	mux.HandleFunc("GET /tabs/{id}/handoff", h.HandleTabHandoffStatus)
 	mux.HandleFunc("GET /tabs/{id}/text", h.HandleTabText)
+	mux.HandleFunc("GET /tabs/{id}/title", h.HandleTabTitle)
+	mux.HandleFunc("GET /tabs/{id}/url", h.HandleTabURL)
+	mux.HandleFunc("GET /tabs/{id}/html", h.HandleTabHTML)
+	mux.HandleFunc("GET /tabs/{id}/styles", h.HandleTabStyles)
 	mux.HandleFunc("GET /tabs/{id}/metrics", h.HandleTabMetrics)
 	mux.HandleFunc("GET /metrics", h.HandleMetrics)
 	mux.HandleFunc("GET /snapshot", h.HandleSnapshot)
@@ -214,6 +209,10 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /pdf", h.HandlePDF)
 	mux.HandleFunc("POST /pdf", h.HandlePDF)
 	mux.HandleFunc("GET /text", h.HandleText)
+	mux.HandleFunc("GET /title", h.HandleTitle)
+	mux.HandleFunc("GET /url", h.HandleURL)
+	mux.HandleFunc("GET /html", h.HandleHTML)
+	mux.HandleFunc("GET /styles", h.HandleStyles)
 	mux.HandleFunc("GET /openapi.json", h.HandleOpenAPI)
 	mux.HandleFunc("GET /help", h.HandleOpenAPI) // alias
 	mux.HandleFunc("POST /navigate", h.HandleNavigate)
@@ -270,6 +269,12 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux, doShutdown func()) {
 	mux.HandleFunc("GET /tabs/{id}/network/export", h.HandleTabNetworkExport)
 	mux.HandleFunc("GET /tabs/{id}/network/export/stream", h.HandleTabNetworkExportStream)
 	mux.HandleFunc("GET /tabs/{id}/network/{requestId}", h.HandleTabNetworkByID)
+	mux.HandleFunc("POST /network/route", h.HandleNetworkRoute)
+	mux.HandleFunc("DELETE /network/route", h.HandleNetworkUnroute)
+	mux.HandleFunc("GET /network/route", h.HandleNetworkRouteList)
+	mux.HandleFunc("POST /tabs/{id}/network/route", h.HandleTabNetworkRoute)
+	mux.HandleFunc("DELETE /tabs/{id}/network/route", h.HandleTabNetworkUnroute)
+	mux.HandleFunc("GET /tabs/{id}/network/route", h.HandleTabNetworkRouteList)
 	mux.HandleFunc("POST /dialog", h.HandleDialog)
 	mux.HandleFunc("POST /tabs/{id}/dialog", h.HandleTabDialog)
 	mux.HandleFunc("POST /wait", h.HandleWait)

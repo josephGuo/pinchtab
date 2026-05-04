@@ -170,6 +170,8 @@ func getInstanceDefaultsField(c *InstanceDefaultsConfig, field string) (string, 
 		return c.UserAgent, nil
 	case "noAnimations":
 		return formatBoolPtr(c.NoAnimations), nil
+	case "humanize":
+		return formatBoolPtr(c.Humanize), nil
 	case "stealthLevel":
 		return c.StealthLevel, nil
 	case "tabEvictionPolicy":
@@ -214,6 +216,8 @@ func getSecurityField(s *SecurityConfig, field string) (string, error) {
 		return formatBoolPtr(s.AllowScreencast), nil
 	case "allowDownload":
 		return formatBoolPtr(s.AllowDownload), nil
+	case "allowNetworkIntercept":
+		return formatBoolPtr(s.AllowNetworkIntercept), nil
 	case "allowedDomains":
 		return strings.Join(s.AllowedDomains, ","), nil
 	case "downloadAllowedDomains":

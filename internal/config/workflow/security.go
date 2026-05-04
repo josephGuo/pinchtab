@@ -44,11 +44,12 @@ func UpdateSensitiveEndpoints(value string) (*config.RuntimeConfig, bool, error)
 			selected[item] = true
 		}
 		for endpoint, path := range map[string]string{
-			"evaluate":   "security.allowEvaluate",
-			"macro":      "security.allowMacro",
-			"screencast": "security.allowScreencast",
-			"download":   "security.allowDownload",
-			"upload":     "security.allowUpload",
+			"evaluate":         "security.allowEvaluate",
+			"macro":            "security.allowMacro",
+			"screencast":       "security.allowScreencast",
+			"download":         "security.allowDownload",
+			"upload":           "security.allowUpload",
+			"networkIntercept": "security.allowNetworkIntercept",
 		} {
 			if err := config.SetConfigValue(fc, path, fmt.Sprintf("%t", selected[endpoint])); err != nil {
 				return fmt.Errorf("set %s: %w", endpoint, err)
@@ -131,6 +132,7 @@ func ApplyGuardsDownPreset() (*config.RuntimeConfig, string, bool, error) {
 		{path: "security.allowScreencast", value: "true"},
 		{path: "security.allowDownload", value: "true"},
 		{path: "security.allowUpload", value: "true"},
+		{path: "security.allowNetworkIntercept", value: "true"},
 		{path: "security.attach.enabled", value: "true"},
 		{path: "security.attach.allowHosts", value: "127.0.0.1,localhost,::1"},
 		{path: "security.attach.allowSchemes", value: "ws,wss"},
@@ -195,6 +197,7 @@ type securityConfigValues struct {
 	AllowMacro            bool
 	AllowScreencast       bool
 	AllowDownload         bool
+	AllowNetworkIntercept bool
 	DownloadMaxBytes      int
 	AllowUpload           bool
 	UploadMaxRequestBytes int
@@ -228,6 +231,9 @@ func securityDefaultsSnapshot(fc *config.FileConfig) securityDefaultsState {
 	}
 	if fc.Security.AllowDownload != nil {
 		s.Security.AllowDownload = *fc.Security.AllowDownload
+	}
+	if fc.Security.AllowNetworkIntercept != nil {
+		s.Security.AllowNetworkIntercept = *fc.Security.AllowNetworkIntercept
 	}
 	if fc.Security.DownloadMaxBytes != nil {
 		s.Security.DownloadMaxBytes = *fc.Security.DownloadMaxBytes
