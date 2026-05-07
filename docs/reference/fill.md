@@ -37,7 +37,7 @@ pinchtab fill e8 "value" --snap         # Fill and show snapshot
 - Refs for iframe descendants can be filled directly without frame switch
 - Selector lookup is limited to current frame scope (default: `main`)
 - Use [`/frame`](./frame.md) before selector-based iframe fills
-- Missing selectors fail immediately; use [`pinchtab wait`](./wait.md) first for async fields
+- Missing selectors fail immediately; use `pinchtab wait` first for async fields (see [`commands.md`](../commands.md))
 - For API, use `selector` field for CSS/XPath/text selectors
 
 ## Related Pages

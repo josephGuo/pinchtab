@@ -24,6 +24,7 @@ OK
 | `--dialog-action` | Auto-handle JS dialog: `accept` or `dismiss` |
 | `--dialog-text` | Prompt response text (with `--dialog-action accept`) |
 | `--x`, `--y` | Click at specific coordinates |
+| `--humanize` | Use humanized bezier+jitter input path (overrides instance config) |
 | `--json` | Full JSON response |
 | `--tab` | Target specific tab |
 
@@ -45,7 +46,7 @@ pinchtab click --x 100 --y 200          # Click at coordinates
 - Refs for iframe descendants can be clicked directly without frame switch
 - Selector lookup is limited to current frame scope (default: `main`)
 - Use [`/frame`](./frame.md) before selector-based iframe actions
-- Missing selectors fail immediately; use [`pinchtab wait`](./wait.md) first for dynamic UI
+- Missing selectors fail immediately; use `pinchtab wait` first for dynamic UI (see [`commands.md`](../commands.md))
 - The API also accepts `selector` field: `{"kind":"click","selector":"#login"}`
 - Raw input is the default. To opt a click into the slower humanized path for a page that needs it, pass `humanize:true` in the action JSON or set `instanceDefaults.humanize:true`.
 

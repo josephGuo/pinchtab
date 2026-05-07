@@ -186,34 +186,26 @@ Example: `docker run -p 127.0.0.1:9867:9867` keeps PinchTab reachable only from 
 
 ### Docker Secrets (Sensitive Configuration)
 
-For production deployments, use Docker secrets instead of env vars for `PINCHTAB_TOKEN`:
+The image only consumes `PINCHTAB_TOKEN` from the environment — it does not read a `PINCHTAB_TOKEN_FILE` indirection. To use Docker secrets, source the secret file in your own entrypoint or wrapper before running the image:
 
 ```bash
 # Create a secret
 echo "your-secret-token" | docker secret create pinchtab_token -
 
-# Use it in docker-compose.yml
+# Use it in docker-compose.yml — read the secret file and export PINCHTAB_TOKEN
 services:
   pinchtab:
     image: pinchtab/pinchtab
     secrets:
       - pinchtab_token
-    environment:
-      PINCHTAB_TOKEN_FILE: /run/secrets/pinchtab_token
-    # ... rest of config
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        export PINCHTAB_TOKEN="$(cat /run/secrets/pinchtab_token)"
+        exec /usr/local/bin/docker-entrypoint.sh pinchtab
 ```
 
-Or with `docker run`:
-
-```bash
-docker run -d \
-  --name pinchtab \
-  --secret pinchtab_token \
-  -e PINCHTAB_TOKEN_FILE=/run/secrets/pinchtab_token \
-  pinchtab/pinchtab
-```
-
-Secrets are mounted read-only and never appear in `docker ps` or logs.
+Secrets mounted at `/run/secrets/...` are read-only and never appear in `docker ps` or logs.
 
 ## Compose
 

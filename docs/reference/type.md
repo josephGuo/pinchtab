@@ -16,6 +16,7 @@ OK
 
 | Flag | Description |
 |------|-------------|
+| `--humanize` | Use humanized per-character keypress timing (overrides instance config) |
 | `--json` | Full JSON response |
 | `--tab` | Target specific tab |
 
@@ -25,7 +26,7 @@ OK
 - Accepts unified selectors: `e8`, `#name`, `xpath://input`, `text:Name`
 - Selector lookup is limited to current frame scope (default: `main`)
 - Use [`/frame`](./frame.md) before iframe typing
-- Missing selectors fail immediately; use [`pinchtab wait`](./wait.md) for async fields
+- Missing selectors fail immediately; use `pinchtab wait` for async fields (see [`commands.md`](../commands.md))
 - For typing into focused element, use `keyboard type`
 - Raw keyboard input is the default. To opt a type action into the slower humanized per-character path, pass `humanize:true` in the action JSON or set `instanceDefaults.humanize:true`.
 

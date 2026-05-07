@@ -12,7 +12,7 @@ This guide walks through setting up PinchTab as an MCP tool server for AI coding
 
 ## What is MCP?
 
-The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard for connecting AI models to external tools. PinchTab implements an MCP server that exposes 34 browser-control tools — navigation, interaction, screenshot, PDF export, waits, network inspection, and more — over a simple stdio interface that every major AI client supports.
+The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standard for connecting AI models to external tools. PinchTab implements an MCP server that exposes 38 browser-control tools — navigation, interaction, screenshot, PDF export, waits, network inspection, and more — over a simple stdio interface that every major AI client supports.
 
 ## Prerequisites
 

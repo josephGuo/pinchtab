@@ -104,10 +104,10 @@ return te.safeRun(ctx, tabID, task) // Execute with panic recovery
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| `TabExecutor` | `internal/bridge/tab_executor.go` | Core parallel execution engine |
+| `TabExecutor` | `internal/bridge/tabs/tab_executor.go` (re-exported via `internal/bridge/tabs_facade.go`) | Core parallel execution engine |
 | `TabManager.Execute()` | `internal/bridge/tab_manager.go` | Integration point for handlers |
 | `Bridge.Execute()` | `internal/bridge/bridge.go` | BridgeAPI interface method |
-| `LockManager` | `internal/bridge/lock.go` | Per-tab ownership locks with TTL |
+| `LockManager` | `internal/bridge/tabs/lock.go` (re-exported via `internal/bridge/tabs_facade.go`) | Per-tab ownership locks with TTL |
 | `TabEntry` | `internal/bridge/bridge.go` | Per-tab chromedp context + metadata |
 
 ### How It Works
@@ -239,18 +239,21 @@ system architecture.
 
 #### What Was Introduced
 
-**Semantic CDP IDs** — Before PR #145, tab identifiers were opaque hashes:
-`tab_abc12345` (12 characters, derived from hashing the Chrome target ID). PR
-#145 replaced this with semantic prefixed IDs: `tab_D25F4C74E1A3...` (40
-characters, with the CDP target ID embedded directly). This zero-state design
-eliminates the need for ID mapping tables and enables cross-process consistency—
-any process can reconstruct the tab ID from the CDP target ID by simply prefixing
-it.
+**Raw CDP target IDs as tab IDs** — Before PR #145, tab identifiers were opaque
+hashes: `tab_abc12345` (12 characters, derived from hashing the Chrome target
+ID). PR #145 replaced the hash with the raw CDP target ID itself, and the
+current implementation is a passthrough — runtime tab IDs are exactly the CDP
+target ID with no `tab_` prefix or hashing. This zero-state design eliminates
+the need for ID mapping tables and enables cross-process consistency: any
+process can route to a tab by referring to its CDP target ID directly.
 
-Key functions introduced:
-- `TabIDFromCDPTarget()` — prefixes instead of hashing
-- `StripTabPrefix()` — extracts the raw CDP ID from a semantic tab ID
-- `TabHashIDForCDP()` — reverse lookup (now trivial: just add prefix)
+Key function (in `internal/ids/ids.go`):
+
+- `Manager.TabIDFromCDPTarget(cdpTargetID)` — returns the CDP target ID as-is.
+
+Synthetic hashed IDs (`tab_XXXXXXXX`) are still produced by `Manager.TabID`
+for callers that need a synthetic identifier, but runtime browser tab routing
+uses the raw CDP target ID directly.
 
 **Tab eviction policies** — PR #145 introduced configurable eviction when the
 maximum tab count (`MaxTabs`) is reached:
@@ -922,7 +925,7 @@ CPU usage remains bounded while I/O parallelism is maximized.
 ```
 goos: windows
 goarch: amd64
-pkg: github.com/nicholasgasior/pinchtab/internal/bridge
+pkg: github.com/pinchtab/pinchtab/internal/bridge
 cpu: Intel(R) Core(TM) i5-4300U CPU @ 1.90GHz
 
 BenchmarkTabExecutor_SequentialSameTab-4          548190     2140 ns/op    136 B/op    3 allocs/op
@@ -930,7 +933,7 @@ BenchmarkTabExecutor_ParallelDifferentTabs-4     1317826      837.0 ns/op  136 B
 BenchmarkTabExecutor_ParallelSameTab-4           1000000     1386 ns/op    136 B/op    3 allocs/op
 BenchmarkTabExecutor_WithWork-4                  1515068      766.4 ns/op  136 B/op    2 allocs/op
 PASS
-ok      github.com/nicholasgasior/pinchtab/internal/bridge    10.356s
+ok      github.com/pinchtab/pinchtab/internal/bridge    10.356s
 ```
 
 **Key observations:**
@@ -1112,23 +1115,24 @@ Located in `internal/bridge/tab_executor_test.go`:
 - **Rapid create/remove** cycles
 - **30 goroutines** targeting the same tab
 
-### Automated Integration Tests (11 tests)
+### Integration Coverage
 
-Located in `tests/manual/test-parallel-execution.ps1`:
+End-to-end coverage of the parallel execution model lives in the bridge package
+tests under `internal/bridge/` (executed with `go test ./internal/bridge/...`)
+and in the manual smoke harnesses under `tests/manual/`. The earlier
+PowerShell-based integration suite has been retired in favour of the Go
+test suite, which exercises the same scenarios:
 
-| Test | Name | What It Validates |
-|------|------|------------------|
-| 1 | Parallel Search Engines | 3 tabs navigate concurrently, URLs isolated |
-| 2 | Resource Limit Enforcement | 5 tabs with maxParallel=2, queuing works |
-| 3 | Same Tab Sequential Ordering | 3 concurrent snapshots on same tab execute sequentially |
-| 4 | Failure Isolation | Invalid URL in one tab doesn't affect other tabs |
-| 5 | Sequential vs Parallel Timing | Measures wall-clock comparison (see Performance Comparison) |
-| 6 | Invalid Tab ID Handling | Non-existent, fake, and closed tab IDs rejected |
-| 7 | Rapid Tab Open/Close Stability | 10 create-navigate-snapshot-close cycles |
-| 8 | Concurrent Snapshots Cross-Tab | 3 simultaneous snapshots, no data leakage |
-| 9 | Request Timeout Handling | Short timeout + tab usability after timeout |
-| 10 | Same Tab State Overwrite | 3 sequential navigations on one tab, each overwrites |
-| 11 | Navigate + Snapshot Race | Concurrent navigate(TabA) + snapshot(TabB) |
+| Scenario | What It Validates |
+|----------|-------------------|
+| Parallel different tabs | Cross-tab concurrency, URLs isolated |
+| Resource limit enforcement | maxParallel cap and queuing behaviour |
+| Same-tab sequential ordering | Per-tab mutex serializes calls |
+| Failure isolation | A failing/panicking tab does not affect others |
+| Sequential vs parallel timing | Wall-clock comparison (see Performance Comparison) |
+| Rapid tab open/close stability | No mutex/goroutine leaks across cycles |
+| Context timeouts under load | Saturated semaphore returns deadline-exceeded |
+| RemoveTab during active execution | RemoveTab waits for in-flight work to drain |
 
 ### Benchmarks
 
@@ -1159,7 +1163,6 @@ go test -v -count=1 ./internal/bridge/
 # 3. Race detector — zero data races
 go test -race -count=1 ./internal/bridge/
 
-# 4. Integration tests — all 11 pass (26 assertions)
-# Requires a running PinchTab instance
-.\tests\manual\test-parallel-execution.ps1 -Port 9867
+# 4. Manual smoke harnesses
+ls tests/manual/   # autosolver-check.sh, autosolver-realworld.sh, openclaw-plugin-smoke, ...
 ```

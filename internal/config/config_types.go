@@ -17,6 +17,7 @@ type RuntimeConfig struct {
 	TrustProxyHeaders bool  // Only trust X-Forwarded-*/Forwarded headers when behind a trusted reverse proxy
 	CookieSecure      *bool // Nil = auto-detect based on request scheme/host for backward compatibility
 	VerboseStartup    bool  // Show full banner and slog output on server start
+	BackgroundMarker  string
 
 	// Security settings
 	AllowEvaluate         bool
@@ -41,6 +42,7 @@ type RuntimeConfig struct {
 	MaxRedirects           int      // Max HTTP redirects (-1=unlimited, 0=none, default=-1)
 	TrustedProxyCIDRs      []string // CIDRs/IPs whose RemoteIPAddress is trusted in navigation responses (e.g. internal proxy)
 	TrustedResolveCIDRs    []string // CIDRs/IPs allowed when a navigation target resolves to non-public addresses
+	TrustLoopbackProxy     bool     // when true, navigation responses with a loopback RemoteIPAddress (e.g. system HTTP/SOCKS proxy on 127.0.0.1) are not blocked; default false
 
 	// Browser/instance settings
 	Headless           bool
@@ -338,6 +340,7 @@ type SecurityConfig struct {
 	MaxRedirects           *int         `json:"maxRedirects,omitempty"`
 	TrustedProxyCIDRs      []string     `json:"trustedProxyCIDRs,omitempty"`
 	TrustedResolveCIDRs    []string     `json:"trustedResolveCIDRs,omitempty"`
+	TrustLoopbackProxy     *bool        `json:"trustLoopbackProxy,omitempty"`
 	Attach                 AttachConfig `json:"attach,omitempty"`
 	IDPI                   IDPIConfig   `json:"idpi,omitempty"`
 }

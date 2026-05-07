@@ -7,5 +7,6 @@ Use these pages when you want lower-level detail than the architecture overview,
 - [Lite Engine](./lite-engine.md) — Chrome-free DOM capture using Gost-DOM
 - [Managed Bridge vs Managed Direct CDP](./managed-bridge-vs-managed-direct-cdp.md)
 - [Chrome Profile Lock Recovery](./chrome-profile-lock-recovery.md)
+- [Chrome Files](./chrome-files.md)
 - [Parallel Tab Execution](./parallel-tab-execution.md)
 - [Docker Local Testing](./docker-local-testing.md)

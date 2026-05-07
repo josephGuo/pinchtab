@@ -12,7 +12,7 @@ The recovery process follows a multi-layered approach to distinguish between a t
 
 ### 1. Detection
 
-During initialization in `internal/bridge/init.go`, if Chrome fails to start, PinchTab checks the error message for signatures of a profile lock:
+During initialization in `internal/bridge/runtime/init.go` (with bridge wiring in `internal/bridge/bridge_lifecycle.go`), if Chrome fails to start, PinchTab checks the error message for signatures of a profile lock:
 - `The profile appears to be in use by another Chromium process`
 - `The profile appears to be in use by another Chrome process`
 - `process_singleton_posix.cc` (indicating a failure in the ProcessSingleton logic)
@@ -31,14 +31,14 @@ To safely clear a lock, PinchTab must be certain no *other* active PinchTab inst
 
 If a headless PinchTab instance cannot acquire a lock on the requested profile directory (because another PinchTab instance is genuinely using it), it automatically falls back to creating a unique temporary profile directory. This allows multiple headless bridges to run concurrently even if they all default to the same profile path, while still preserving isolation and safety.
 
-### 4. Stale Process Termination
+### 4a. Stale Process Termination
 
 Even if the previous PinchTab instance is dead, orphaned Chrome processes might still be holding the profile lock.
 
 - **Process Listing**: PinchTab scans the system process list for any processes launched with the same `--user-data-dir`.
 - **Aggressive Cleanup**: If the `pinchtab.pid` check confirms no active owner, PinchTab sends `SIGKILL` to any orphaned Chrome processes associated with that profile. This is necessary because Chrome's internal "singleton" logic can be extremely stubborn if it thinks another process is even partially alive.
 
-### 4. Lock File Removal
+### 4b. Lock File Removal
 
 Once stale processes are terminated, PinchTab removes the following files from the profile directory:
 - `SingletonLock`
@@ -55,7 +55,8 @@ The logic is distributed across these components:
 
 - **`internal/bridge/profile_lock.go`**: Core logic for detection, PID lock management (`AcquireProfileLock`), and stale file removal.
 - **`internal/bridge/profile_lock_pid_*.go`**: Platform-specific implementations for PID probing and process killing (supports Unix-like systems and Windows).
-- **`internal/bridge/init.go`**: Orchestrates the retry logic within `startChromeWithRecovery`.
+- **`internal/bridge/runtime/init.go`**: Orchestrates the retry logic within `startChromeWithRecovery`.
+- **`internal/bridge/bridge_lifecycle.go`**: Calls `AcquireProfileLock` and `EnsureChrome` during bridge startup.
 - **`internal/server/bridge.go`**: Ensures clean shutdown via signal handling to prevent locks from being left behind in the first place.
 
 ## Multi-Instance Safety

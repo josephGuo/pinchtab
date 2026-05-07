@@ -52,7 +52,7 @@ Sessions are the full identity solution. Each session is a revocable, server-man
 
 - **Labels** — human-readable names like "research task" or "daily scrape"
 - **Activity grouping** — all requests within a session are grouped in the dashboard
-- **Idle timeout** — sessions expire after 12 hours of inactivity (configurable)
+- **Idle timeout** — sessions expire after 30 minutes of inactivity (configurable)
 - **Max lifetime** — hard expiry after 24 hours (configurable)
 - **Revocation** — kill a session without rotating the server token
 
@@ -140,9 +140,9 @@ curl -X POST http://localhost:9867/sessions/ses_e6ac8132fe7e7016/revoke \
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `sessions.agent.enabled` | `false` | Enable agent sessions |
+| `sessions.agent.enabled` | `true` | Enable agent sessions |
 | `sessions.agent.mode` | `preferred` | Auth mode: `off`, `preferred`, `required` |
-| `sessions.agent.idleTimeoutSec` | `43200` (12h) | Session expires after this many seconds of inactivity |
+| `sessions.agent.idleTimeoutSec` | `1800` (30m) | Session expires after this many seconds of inactivity |
 | `sessions.agent.maxLifetimeSec` | `86400` (24h) | Hard session expiry |
 
 If a session record carries explicit grants, those grants narrow which endpoint groups the session may call. If a session has no explicit grants, it can use the normal non-admin automation API by default, while dashboard/admin routes remain blocked. That default is meant for trusted automation only.

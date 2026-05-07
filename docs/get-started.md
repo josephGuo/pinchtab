@@ -52,7 +52,7 @@ go build -o pinchtab ./cmd/pinchtab
 ./pinchtab --version
 ```
 
-**[Full build guide ->](architecture/building.md)**
+**[Full build & contribution guide ->](guides/contributing.md)**
 
 ## Platform Support
 

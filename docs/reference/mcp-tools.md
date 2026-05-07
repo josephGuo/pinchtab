@@ -1,8 +1,8 @@
 # MCP Tool Reference
 
-PinchTab currently exposes 34 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
+PinchTab currently exposes 38 MCP tools. All tool names are prefixed with `pinchtab_` and are served over stdio JSON-RPC.
 
-For selector-based interaction tools, prefer `selector`. `ref` is still accepted as a deprecated fallback on the element-action tools.
+For selector-based interaction tools, prefer `selector`. `ref` and `query` are still accepted as deprecated/alias fallbacks on the element-action tools (`query` is shorthand for `find:<text>`).
 
 If you allow MCP browsing on non-local or non-trusted domains, treat `pinchtab_snapshot` and `pinchtab_get_text` output as untrusted page data. Those tools can surface hostile prompt text from visited pages; operators should keep IDPI/domain restrictions narrow unless wider access is intentional.
 
@@ -23,23 +23,27 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_navigate` | `url` required, `tabId` optional | Uses `/navigate`; omitting `tabId` opens a new tab |
+| `pinchtab_navigate` | `url` required, `tabId`, `snap` | Uses `/navigate`; omitting `tabId` opens a new tab. `snap=true` returns an interactive compact snapshot in the same response |
 | `pinchtab_snapshot` | `tabId`, `interactive`, `compact`, `format`, `diff`, `selector`, `maxTokens`, `depth`, `noAnimations` | `selector` scopes the snapshot; `format` is limited to `compact` or `text` |
+| `pinchtab_frame` | `tabId`, `target` | Get or set the frame scope for selector-based actions on the tab; `target` accepts `main`, a snapshot ref, an iframe selector, or a frame name/URL |
 | `pinchtab_screenshot` | `tabId`, `selector`, `css1x`, `format`, `quality` | `selector` captures a specific element in current frame scope; `css1x=true` exports selector shots at CSS pixel size; `format` is `jpeg` or `png` |
 | `pinchtab_get_text` | `tabId`, `raw`, `format`, `maxChars` | `raw=true` maps to `/text?mode=raw`; `format=text/plain` returns plain text; inherits the current `pinchtab_frame` scope for that tab |
 
 ## Interaction
 
+All element-action tools accept the unified `selector` and the legacy aliases `ref` (deprecated) and `query` (semantic shorthand).
+
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_click` | `selector` required, `tabId`, `ref`, `waitNav` | Click element by selector; `waitNav=true` waits for navigation |
-| `pinchtab_type` | `selector` required, `text` required, `tabId`, `ref` | Sends key events |
+| `pinchtab_click` | `selector`, `ref`, `query`, `tabId`, `x`, `y`, `nodeId`, `dialogAction`, `dialogText`, `waitNav`, `snap` | Click element by selector or coordinate; `dialogAction` handles a dialog opened by the click; `waitNav=true` waits for navigation; `snap=true` returns a snapshot |
+| `pinchtab_type` | `selector`, `ref`, `query`, `text` required, `tabId` | Sends key events at the targeted input |
 | `pinchtab_press` | `key` required, `tabId` | Press a key such as `Enter` |
-| `pinchtab_hover` | `selector` required, `tabId`, `ref` | Hover element |
-| `pinchtab_focus` | `selector` required, `tabId`, `ref` | Focus element |
-| `pinchtab_select` | `selector` required, `value` required, `tabId`, `ref` | Select `<option>` by value or visible text |
-| `pinchtab_scroll` | `selector`, `pixels`, `tabId`, `ref` | Omit `selector` to scroll the page |
-| `pinchtab_fill` | `selector` required, `value` required, `tabId`, `ref` | Direct fill instead of keystrokes |
+| `pinchtab_hover` | `selector`, `ref`, `query`, `tabId`, `x`, `y`, `nodeId` | Hover an element or coordinate |
+| `pinchtab_focus` | `selector`, `ref`, `query`, `tabId`, `nodeId` | Focus element |
+| `pinchtab_select` | `selector`, `ref`, `query`, `value` required, `tabId`, `snap` | Select `<option>` by value or visible text |
+| `pinchtab_scroll` | `selector`, `ref`, `query`, `pixels`, `deltaX`, `deltaY`, `direction`, `steps`, `x`, `y`, `tabId` | Omit `selector` to scroll the page; element + `pixels` uses wheel semantics; `direction` accepts `up`/`down` |
+| `pinchtab_scroll_into_view` | `selector`, `ref`, `query`, `tabId` | Scrolls the target into view and returns geometry for stable follow-up actions |
+| `pinchtab_fill` | `selector`, `ref`, `query`, `value` required, `tabId`, `snap` | Direct fill via JS dispatch instead of keystrokes |
 
 ## Keyboard
 
@@ -54,9 +58,9 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_eval` | `expression` required, `tabId` | Requires `security.allowEvaluate` (documented non-default JS-execution opt-in) |
+| `pinchtab_eval` | `expression` required, `tabId` | Requires `security.allowEvaluate` (documented non-default JS-execution opt-in). Not frame-scoped — current `pinchtab_frame` state does not change evaluation context |
 | `pinchtab_pdf` | `tabId`, `landscape`, `scale`, `pageRanges` | Returns base64-encoded PDF content |
-| `pinchtab_find` | `query` required, `tabId` | Semantic element search |
+| `pinchtab_find` | `query` required, `tabId` | Semantic element search; returns `best_ref` and selector hints to reuse in action tools |
 
 ## Tab Management
 
@@ -73,10 +77,10 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
 | `pinchtab_wait` | `ms` required | Fixed-duration wait, capped at 30000 ms |
-| `pinchtab_wait_for_selector` | `selector` required, `timeout`, `state`, `tabId` | `state` is `visible` or `hidden` |
+| `pinchtab_wait_for_selector` | `selector` required, `timeout`, `state`, `tabId` | `state` is `visible` (default) or `hidden` |
 | `pinchtab_wait_for_text` | `text` required, `timeout`, `tabId` | Wait for body text |
 | `pinchtab_wait_for_url` | `url` required, `timeout`, `tabId` | URL glob match |
-| `pinchtab_wait_for_load` | `load` required, `timeout`, `tabId` | Currently supports `networkidle` |
+| `pinchtab_wait_for_load` | `load` required, `timeout`, `tabId` | `load` is `ready-state` (`readyState=complete`), `content-loaded` (`readyState` in `{interactive, complete}`), or `network-idle` (0 in-flight requests for 500 ms) |
 | `pinchtab_wait_for_function` | `fn` required, `timeout`, `tabId` | JS expression must become truthy |
 
 ## Network
@@ -86,12 +90,14 @@ Structured semantic locators are matched by the semantic engine; CSS, XPath, ref
 | `pinchtab_network` | `tabId`, `filter`, `method`, `status`, `type`, `limit`, `bufferSize` | Lists recent network requests |
 | `pinchtab_network_detail` | `requestId` required, `tabId`, `body` | `body=true` includes response body when available |
 | `pinchtab_network_clear` | `tabId` | Clears one tab or all tabs when omitted |
+| `pinchtab_network_route` | `tabId` required, `pattern` required, `action`, `body`, `contentType`, `status`, `resourceType`, `method` | Install a request-interception rule on a tab. `action` is `continue` (default), `abort`, or `fulfill`. `fulfill` is blocked on hosts in `security.allowedDomains` and falls through to a real fetch on those hosts |
+| `pinchtab_network_unroute` | `tabId` required, `pattern` | Remove a tab's interception rule by pattern, or all rules when `pattern` is omitted |
 
 ## Dialog
 
 | Tool | Key Parameters | Notes |
 | --- | --- | --- |
-| `pinchtab_dialog` | `action` required, `text`, `tabId` | `action` is `accept` or `dismiss` |
+| `pinchtab_dialog` | `action` required, `text`, `tabId` | `action` is `accept` or `dismiss`; `text` is used as the prompt response with `accept` |
 
 ## Return Shapes
 

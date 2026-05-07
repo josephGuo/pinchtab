@@ -49,4 +49,4 @@ If you see the error `"The profile appears to be in use by another Chromium proc
 2.  **Stale Locks**: If no process is active, PinchTab will attempt to automatically clear stale `SingletonLock` files on the next startup.
 3.  **Manual Fix**: In rare cases, you may need to manually remove the `SingletonLock` file from the profile directory.
 
-For more details on how PinchTab recovers from crashes, see [Chrome Profile Lock Recovery](docs/implementations/chrome-profile-lock-recovery.md).
+For more details on how PinchTab recovers from crashes, see [Chrome Profile Lock Recovery](./chrome-profile-lock-recovery.md).

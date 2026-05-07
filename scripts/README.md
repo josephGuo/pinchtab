@@ -21,6 +21,7 @@ Development and CI scripts for PinchTab.
 | Script | Purpose |
 |--------|---------|
 | `build.sh` | Full build (dashboard + Go) without starting the server |
+| `install.sh` | Full build + install to `~/.local/bin/pinchtab` (override with `PINCHTAB_INSTALL_DIR`); re-signs ad-hoc on macOS |
 | `binary.sh` | Release-style stripped binary build into `dist/` for the current platform, or the full matrix with `all` |
 | `build-dashboard.sh` | Generate TS types (tygo) + build React dashboard + copy to Go embed |
 | `autosolver-realworld-smoke.sh` | Smoke-test real-world autosolver flow against an external detection page |

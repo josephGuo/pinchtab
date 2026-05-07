@@ -193,7 +193,7 @@ ls -la pinchtab
 ### Start (Headless)
 
 ```bash
-./pinchtab
+./pinchtab server
 ```
 
 **Expected output:**
@@ -205,17 +205,22 @@ auth disabled (set PINCHTAB_TOKEN to enable)
 ### Start (Headed Mode)
 
 ```bash
-BRIDGE_HEADLESS=false ./pinchtab
+./pinchtab server --headed
 ```
 
-Opens Chrome in the foreground.
+Opens Chrome in the foreground for the default instance.
 
 ### Background
 
 ```bash
-nohup ./pinchtab > pinchtab.log 2>&1 &
-tail -f pinchtab.log  # Watch logs
+./pinchtab server --background        # spawns detached, prints JSON with pid/url/token
+./pinchtab server -b                  # short form
 ```
+
+The `--background` flag forks a properly detached server process and returns
+`{"pid": ..., "url": ..., "token": ...}` on stdout, so scripts can capture the
+URL/token without log scraping. For a longer-lived install, use
+`pinchtab daemon install` instead.
 
 ---
 
@@ -453,7 +458,7 @@ This will tell you exactly what's missing or misconfigured.
 
 **"Port 9867 already in use"**
 - Check: `lsof -i :9867`
-- Stop other instance or use different port: `BRIDGE_PORT=9868 ./pinchtab`
+- Stop other instance or change the port via config: `pinchtab config set server.port 9868`
 
 **Build fails**
 1. Verify dependencies: `go mod download`

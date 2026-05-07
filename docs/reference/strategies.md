@@ -20,6 +20,7 @@ Valid strategies in the current implementation:
 - `simple`
 - `explicit`
 - `simple-autorestart`
+- `no-instance`
 
 ### `simple`
 
@@ -84,6 +85,23 @@ Best fit:
 - kiosk or appliance-style setups
 - unattended local services
 - environments where one browser should come back after a crash
+
+### `no-instance`
+
+`no-instance` runs PinchTab as a hub that does not launch any local Chrome processes. It only accepts remote bridges via `POST /instances/attach-bridge` and proxies shorthand requests to the first attached bridge.
+
+Behavior:
+
+- never launches a local instance
+- registers the orchestrator API in no-launch mode
+- shorthand routes (`/snapshot`, `/text`, `/navigate`, `/tabs`, etc.) proxy to the first attached remote bridge, or return `503 no remote instances connected — attach a bridge first` when none is attached
+- `GET /tabs` returns an empty list when no bridge is attached, instead of erroring
+
+Best fit:
+
+- bridge-orchestrator deployments where browsers run on other hosts (Tailscale, remote workers)
+- centralized routing tiers that should never spawn Chrome themselves
+- environments where the local PinchTab process must remain a pure proxy
 
 ## Allocation Policy
 
@@ -209,6 +227,7 @@ always-on           = default, launched at startup, restarted under restart poli
 simple              = on-demand shorthand auto-launch
 explicit            = most control, no shorthand auto-launch
 simple-autorestart  = one managed browser with crash recovery
+no-instance         = pure proxy/hub for remote bridges, never launches Chrome
 
 fcfs                = deterministic
 round_robin         = balanced rotation

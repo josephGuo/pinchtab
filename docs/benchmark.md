@@ -81,21 +81,24 @@ Two structural differences drive the gap:
 ## Reproducing
 
 ```bash
-cd tests/benchmark
-docker compose up -d --build
-./scripts/run-optimization.sh
+# From the repo root. The benchmark runs in Docker and the entry points
+# live in tests/tools/, not tests/benchmark/.
 
-# Baseline (deterministic, ~30s)
-./scripts/baseline.sh
+# Deterministic baseline (no API key required)
+./dev opt baseline
 
 # PinchTab and agent-browser lanes (Anthropic API key required)
-ANTHROPIC_API_KEY=... ./scripts/run-api-benchmark.ts --lane pinchtab --groups 0,1
-ANTHROPIC_API_KEY=... ./scripts/run-api-benchmark.ts --lane agent-browser --groups 0,1
+ANTHROPIC_API_KEY=... ./dev bench pinchtab --groups 0,1
+ANTHROPIC_API_KEY=... ./dev bench agent-browser --groups 0,1
 
-# Inspect usage
-jq '.run_usage' results/pinchtab_benchmark_*.json
-jq '.run_usage' results/agent_browser_benchmark_*.json
+# Inspect usage (results land under tests/benchmark/results/)
+jq '.run_usage' tests/benchmark/results/pinchtab_benchmark_*.json
+jq '.run_usage' tests/benchmark/results/agent_browser_benchmark_*.json
 ```
+
+The shell entry points and Docker compose files live under
+`tests/tools/scripts/` and `tests/tools/docker-compose*.yml`; the agent
+loop is the Go binary at `tests/tools/runner/`.
 
 See the [benchmark deep dive](./deep-dive/benchmark.md) for per-run
 tables, raw transcripts, token breakdowns, variance discussion, and

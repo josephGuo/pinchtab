@@ -47,7 +47,7 @@ Each accessibility node is converted into a descriptor with:
 - `documentIdx`
 - positional hints: `depth`, `siblingIndex`, `siblingCount`, `labelledBy`
 
-PinchTab owns extraction of DOM-only metadata from backend node ids. The `semantic` package owns structured locator parsing and matching for `role:`, `text:`, `label:`, `placeholder:`, `alt:`, `title:`, `testid:`, `first:`, `last:`, and `nth:` forms.
+PinchTab owns extraction of DOM-only metadata from backend node ids. The structured locator parsing and matching for `role:`, `text:`, `label:`, `placeholder:`, `alt:`, `title:`, `testid:`, `first:`, `last:`, and `nth:` forms is delegated to the external `github.com/pinchtab/semantic` Go module (a sibling package, not part of this repo). The in-repo `internal/autosolver/semantic/adapter.go` is just a thin adapter that wires the module into the autosolver.
 
 CSS, XPath, refs, frame scoping, converting a matched ref back to a backend node, and the existing DOM-backed action `text:` selector remain PinchTab responsibilities.
 
@@ -108,9 +108,9 @@ After a successful match, PinchTab records:
 
 This allows recovery logic to attempt a semantic re-match if a later action fails because the old ref became stale after a page update.
 
-## Orchestrator Routing
+## Routing
 
-The orchestrator exposes `POST /tabs/{id}/find` and proxies it to the correct running instance. The actual matching implementation remains in the shared handler layer.
+`POST /tabs/{id}/find` (and the active-tab shorthand `POST /find`) is registered by the shared handler layer in `internal/handlers/handlers.go`. The orchestrator proxies these requests to the correct running instance via its routing layer; it does not own the route itself.
 
 ## Design Constraints
 

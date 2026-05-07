@@ -20,6 +20,7 @@ Use this when menus or tooltips appear only after hover.
 |------|-------------|
 | `--css` | CSS selector instead of ref |
 | `--x`, `--y` | Hover at specific coordinates |
+| `--humanize` | Use humanized bezier+jitter input path (overrides instance config) |
 | `--json` | Full JSON response |
 | `--tab` | Target specific tab |
 

@@ -95,12 +95,16 @@ The main instance fields surfaced by the current API are:
 - `profileId`
 - `profileName`
 - `port`
+- `url`
+- `mode` (`headless` or `headed`)
 - `headless`
 - `status`
 - `startTime`
 - `error`
 - `attached`
+- `attachType` (`cdp` or `bridge`, for attached instances)
 - `cdpUrl`
+- `securityPolicy`
 
 Useful interpretation:
 

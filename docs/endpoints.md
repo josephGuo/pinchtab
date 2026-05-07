@@ -110,9 +110,9 @@ Notes:
 - `POST /tabs/{id}/handoff` marks the tab as `paused_handoff` and records a reason
 - `GET /tabs/{id}/handoff` returns the current handoff state, or `active` when no handoff is set
 - `POST /tabs/{id}/resume` clears the handoff state and can carry resume metadata for the caller
-- current behavior is advisory only: handoff state is not yet a hard block on subsequent automation requests
-- treat the current implementation as temporary coordination state, not as a security boundary
-- there is currently no dedicated CLI wrapper for handoff or resume; use the HTTP API
+- a paused-handoff tab is a hard block on the action-execution routes (`/action`, `/actions`, `/macro`): they return `409 tab_paused_handoff` until `/resume` clears the state
+- treat the handoff record as coordination state, not as a security boundary — non-action endpoints (snapshots, screenshots, network logs, evals subject to their own gates) remain reachable
+- CLI wrappers exist: `pinchtab handoff`, `pinchtab resume`, `pinchtab handoff-status`, plus the `pinchtab tab handoff|resume|handoff-status` aliases
 
 ## Tab Locking
 
@@ -541,7 +541,7 @@ POST /instances/{id}/tab
 Notes:
 
 - `/instances/start` and `/instances/launch` use `mode`, not `headless`
-- `/instances/launch` is a compatibility alias over `/instances/start`
+- `/instances/launch` is a sibling endpoint of `/instances/start` (separate handler `handleLaunchByName`), kept for the launch-by-profile workflow; `name` on the body is no longer supported, profiles must already exist
 - instance responses include both `mode` and `headless`
 - instance start surfaces accept `securityPolicy.allowedDomains` for additive instance-scoped IDPI/domain allowlist overrides
 - create profiles explicitly with `POST /profiles`; `name` is no longer supported on `/instances/launch`

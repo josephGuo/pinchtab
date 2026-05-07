@@ -81,21 +81,22 @@ pinchtab --server http://remote:9867 mcp
 
 ## Available Tools
 
-PinchTab currently exposes 34 tools:
+PinchTab currently exposes 38 tools:
 
-- Navigation: 4
-- Interaction: 8
+- Navigation: 5
+- Interaction: 9
 - Keyboard: 4
 - Content: 3
 - Tab management: 5
 - Wait utilities: 6
-- Network: 3
+- Network: 5
 - Dialog: 1
 
 ### Navigation
 
 - `pinchtab_navigate`
 - `pinchtab_snapshot`
+- `pinchtab_frame`
 - `pinchtab_screenshot`
 - `pinchtab_get_text`
 
@@ -108,6 +109,7 @@ PinchTab currently exposes 34 tools:
 - `pinchtab_focus`
 - `pinchtab_select`
 - `pinchtab_scroll`
+- `pinchtab_scroll_into_view`
 - `pinchtab_fill`
 
 ### Keyboard
@@ -145,6 +147,8 @@ PinchTab currently exposes 34 tools:
 - `pinchtab_network`
 - `pinchtab_network_detail`
 - `pinchtab_network_clear`
+- `pinchtab_network_route`
+- `pinchtab_network_unroute`
 
 ### Dialog
 

@@ -211,7 +211,9 @@ CS: 687 ms vs 130 ms).
 | `internal/handlers/navigation.go` | `useLite()` fast path, `X-Engine` header |
 | `internal/handlers/snapshot.go` | `SnapshotNode → A11yNode` conversion for lite path |
 | `internal/handlers/text.go` | Lite text fast path |
-| `cmd/pinchtab/cmd_bridge.go` | Router wiring from `config.Engine` at startup |
+| `cmd/pinchtab/cmd_bridge.go` | Resolves the engine mode string from CLI flag / config (`resolveBridgeEngine`) |
+| `internal/server/bridge.go` | Wires the `engine.Router` (`engine.NewRouter(mode, lite)`) into the handler at startup |
+| `internal/config/config_types.go` | `RuntimeConfig.Engine` / `ServerConfig.Engine` fields |
 
 ---
 

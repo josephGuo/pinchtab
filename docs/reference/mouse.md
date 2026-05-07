@@ -42,6 +42,7 @@ pinchtab drag e5 400,320
 
 Notes:
 
+- All `mouse` subcommands and `drag` accept `--humanize` to opt the action into the humanized bezier+jitter input path (overrides `instanceDefaults.humanize`).
 - `mouse move` accepts either coordinates or a unified selector.
 - `mouse down` and `mouse up` accept an optional selector. Without one, they use the current pointer position.
 - `mouse wheel` accepts either a delta form (`<dy> [--dx <n>]`) or an optional selector. Without a selector, it uses the current pointer position.

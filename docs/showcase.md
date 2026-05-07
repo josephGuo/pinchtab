@@ -99,7 +99,7 @@ pinchtab click e14
 curl -s http://127.0.0.1:9867/screenshot > smoke.jpg
 ls -lh smoke.jpg
 # CLI Alternative
-pinchtab ss -o smoke.jpg
+pinchtab screenshot -o smoke.jpg
 # Response
 Saved smoke.jpg (55876 bytes)
 ```
@@ -168,7 +168,7 @@ Saved report.pdf (1494657 bytes)
 curl -s http://127.0.0.1:9867/screenshot > page.jpg
 ls -lh page.jpg
 # CLI Alternative
-pinchtab ss -o page.jpg
+pinchtab screenshot -o page.jpg
 # Response
 Saved page.jpg (55876 bytes)
 ```

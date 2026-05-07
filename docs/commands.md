@@ -163,11 +163,12 @@ pinchtab network                        # List captured network requests
 pinchtab network <requestId>            # Show one request in detail
 pinchtab network --stream               # Stream network entries
 pinchtab network --clear                # Clear captured network data
-pinchtab network-export                 # Export as HAR 1.2 (saved to exports/)
-pinchtab network-export -o session.har  # Export to specific file
-pinchtab network-export --format ndjson # Export as NDJSON (one entry per line)
-pinchtab network-export --body          # Include response bodies
-pinchtab network-export --stream -o l.har # Live capture to file while browsing
+# HAR / NDJSON export is available over HTTP (no dedicated CLI subcommand):
+#   curl http://127.0.0.1:9867/network/export                 → HAR 1.2 archive
+#   curl http://127.0.0.1:9867/network/export?format=ndjson   → NDJSON (one entry per line)
+#   curl http://127.0.0.1:9867/network/export?body=1          → include response bodies
+#   curl http://127.0.0.1:9867/network/export/stream          → live HAR stream
+# Per-tab variants live under /tabs/{id}/network/export[/stream].
 pinchtab dialog accept [text]           # Accept alert/confirm/prompt
 pinchtab dialog dismiss                 # Dismiss dialog
 pinchtab console                        # Show console logs
@@ -302,7 +303,6 @@ Commands with `--tab` currently include:
 - `keyup`
 - `scrollintoview`
 - `network`
-- `network-export`
 - `wait`
 - `dialog accept`
 - `dialog dismiss`

@@ -36,9 +36,9 @@ In `config.json`:
 
 ## Lifecycle
 
-1. **Create** — via dashboard API: `POST /sessions`
-2. **Use** — agent sends `Authorization: Session ses_...` with each request
-3. **Revoke** — permanently disable: `POST /sessions/{id}/revoke`
+1. **Create** — `pinchtab session create --agent-id <id>` (or `POST /sessions` directly)
+2. **Use** — agent sends `Authorization: Session ses_...` with each request, or sets `PINCHTAB_SESSION`
+3. **Revoke** — `pinchtab session revoke <session-id>` (or `POST /sessions/{id}/revoke`)
 
 ## Security
 
@@ -65,14 +65,21 @@ That default is a convenience for trusted automation, not a sandbox. If you need
 ## CLI Usage
 
 ```bash
-# Set session token
-export PINCHTAB_SESSION=ses_abc123...
+# Create a new session (prints token to stdout with --print-token)
+pinchtab session create --agent-id agent-1 --print-token
+export PINCHTAB_SESSION=$(pinchtab session create --agent-id agent-1 --print-token)
 
-# CLI automatically uses session auth
+# CLI automatically uses session auth when PINCHTAB_SESSION is set
 pinchtab snap
 
-# Check session info
+# Inspect the current session (uses PINCHTAB_SESSION)
 pinchtab session info
+
+# List all sessions on the server (server bearer token required)
+pinchtab session list
+
+# Revoke a session by id
+pinchtab session revoke ses_abc123def456
 ```
 
 ## API Endpoints

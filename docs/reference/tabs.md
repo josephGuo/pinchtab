@@ -246,7 +246,13 @@ curl -X POST http://localhost:9867/tabs/<tabId>/cookies \
   -d '{"cookies":[{"name":"session","value":"abc"}]}'
 ```
 
-There is no dedicated top-level cookies CLI command today.
+A `pinchtab cookies` CLI command is available; today it exposes a single subcommand:
+
+```bash
+pinchtab cookies clear     # clear all cookies via CDP (affects all origins)
+```
+
+Reading and writing cookie payloads is HTTP-only.
 
 ## Metrics
 
@@ -276,5 +282,4 @@ There are also active-tab forms at `POST /lock` and `POST /unlock`.
 
 - There is no `GET /tabs/{id}` endpoint for fetching single-tab metadata.
 - `GET /tabs` and `GET /instances/tabs` serve different purposes and are not interchangeable.
-- In the CLI, tab-scoped work happens through top-level commands with `--tab`, not through `pinchtab tab <subcommand>` variants.
-- There is no dedicated CLI `handoff` or `resume` command today.
+- In the CLI, tab-scoped work happens through top-level commands with `--tab`, not through `pinchtab tab <subcommand>` variants — except for `handoff`, `resume`, and `handoff-status`, which are exposed both as top-level commands and as `pinchtab tab handoff|resume|handoff-status` subcommands.

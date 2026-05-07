@@ -82,12 +82,13 @@ No handler, config, or CMD changes needed.
 ### Modified Files (8)
 | File | Change |
 |------|--------|
-| `internal/config/config.go` | Added `Engine` field to RuntimeConfig + ServerConfig |
+| `internal/config/config_types.go` | Added `Engine` field to RuntimeConfig + ServerConfig |
 | `internal/handlers/handlers.go` | Added `Router *engine.Router` field, `useLite()` helper |
 | `internal/handlers/navigation.go` | Lite fast path before ensureChrome |
 | `internal/handlers/snapshot.go` | Lite fast path with SnapshotNode → A11yNode conversion |
 | `internal/handlers/text.go` | Lite fast path returning plain text |
-| `cmd/pinchtab/cmd_bridge.go` | Engine router wiring based on config mode |
+| `cmd/pinchtab/cmd_bridge.go` | Resolves engine mode (`resolveBridgeEngine`) from CLI flag and config |
+| `internal/server/bridge.go` | Constructs the `engine.Router` (`engine.NewRouter(mode, lite)`) and wires it into the handler |
 | `go.mod` | Added gost-dom/browser v0.11.0, gost-dom/css v0.1.0 |
 | `go.sum` | Updated checksums |
 

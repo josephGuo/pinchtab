@@ -35,7 +35,7 @@ pinchtab mcp
   ├── reads PINCHTAB_TOKEN  (env or config)
   │
   ├── creates internal/mcp.Client  (HTTP client with 120 s timeout)
-  ├── registers 34 MCP tools via mcp-go SDK
+  ├── registers 38 MCP tools via mcp-go SDK
   └── calls server.ServeStdio()  (blocking read loop)
 ```
 
@@ -45,10 +45,18 @@ The process exits when stdin is closed by the client.
 
 ```
 internal/mcp/
-├── server.go      # NewServer() wires tools → handlers; Serve() starts stdio
-├── tools.go       # allTools() — JSON-schema tool definitions for all 34 tools
-├── handlers.go    # handlerMap() — one handler closure per tool
-└── client.go      # Client — thin HTTP wrapper for PinchTab REST API
+├── server.go               # NewServer() wires tools → handlers; Serve() starts stdio
+├── tools.go                # allTools() — JSON-schema tool definitions for all 38 tools
+├── handlers.go             # handlerMap() — registers each tool's handler
+├── handlers_helpers.go     # shared argument parsing / response helpers
+├── handlers_navigation.go  # navigate, snapshot, frame, screenshot, get_text
+├── handlers_interaction.go # click, type, press, hover, focus, select, scroll(_into_view), fill
+├── handlers_content.go     # eval, pdf, find
+├── handlers_tabs.go        # list_tabs, close_tab, health, cookies, connect_profile
+├── handlers_wait.go        # wait, wait_for_selector/text/url/load/function
+├── handlers_network.go     # network, network_detail/clear/route/unroute
+├── handlers_dialog.go      # dialog
+└── client.go               # Client — thin HTTP wrapper for PinchTab REST API
 
 cmd/pinchtab/
 └── cmd_mcp.go     # runMCP() — reads config, calls mcp.Serve()
@@ -88,19 +96,20 @@ The context passed from the MCP SDK carries the client's deadline, so long-runni
 - a 120-second timeout (covers page loads and PDF exports)
 - optional `Authorization: Bearer <token>` header injection
 - a 10 MB response body limit
-- URL validation in `handleNavigate` (must start with `http://` or `https://`)
+
+URL validation lives in `handleNavigate` (`handlers_navigation.go`), which calls `internal/urls.Sanitize` to normalize bare hostnames to `https://` and reject non-HTTP(S) schemes (`file://`, `javascript:`, etc.).
 
 ## Tool Categories
 
 | Category | Count | REST Endpoints Used |
 |----------|-------|---------------------|
-| Navigation | 4 | `/navigate`, `/snapshot`, `/screenshot`, `/text` |
-| Interaction | 8 | `/action` |
+| Navigation | 5 | `/navigate`, `/snapshot`, `/frame`, `/screenshot`, `/text` |
+| Interaction | 9 | `/action` |
 | Keyboard | 4 | `/action` |
 | Content | 3 | `/evaluate`, `/pdf`, `/find` |
 | Tab Management | 5 | `/tabs`, `/health`, `/cookies`, `/profiles/{id}/instance` |
 | Wait utilities | 6 | `/wait` |
-| Network | 3 | `/network` |
+| Network | 5 | `/network`, `/network/route` (POST/DELETE) |
 | Dialog | 1 | `/dialog` |
 
 ## Security Considerations

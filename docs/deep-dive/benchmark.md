@@ -63,7 +63,7 @@ For each step:
 1. The runner sends the task description plus the accumulated transcript to
    Anthropic.
 2. The model emits a shell command (one of `./scripts/pt ...`, `./scripts/ab
-   ...`, or `./scripts/runner step-end ...`).
+   ...`, or `./scripts/runner step-end ...`, all under `tests/tools/scripts/`).
 3. The runner executes the command inside the lane's container and appends
    the result to the transcript.
 4. Once the model answers, `./scripts/runner step-end` records the answer and
@@ -107,7 +107,7 @@ deliberate, to keep the comparison fair:
   agent-browser --full`. In the benchmark the runner extracts only the
   header plus `references/commands.md` and `references/snapshot-refs.md`
   and drops the rest (see
-  `tests/tools/runner/prompt.go:DownloadAgentBrowserSkill`).
+  `tests/tools/runner/internal/bench/prompt.go:DownloadAgentBrowserSkill`).
 
 In a 10-step test, the full reference bundles would dominate `cache_read`
 tokens on the lane that happens to ship more reference content. Charging
@@ -347,8 +347,9 @@ dynamic-content interactions — make up most of Group 1 and all of
 Groups 2–5.
 
 A stronger future comparison would co-design the task set with both teams,
-or run a much larger task set (the full 39-group benchmark lives in
-`tests/benchmark/`) so idiosyncratic per-task biases average out.
+or run a much larger task set (the in-repo benchmark groups live in
+`tests/benchmark/` — `group-00.md` through `group-05.md` today, with room to
+grow) so idiosyncratic per-task biases average out.
 
 ### 2. Partial-skill configuration
 
@@ -482,7 +483,7 @@ Machine-specific paths have been replaced with `<repo>` for portability.
 ## Future Work
 
 - Fix the two measurement bugs (pinchtab tool-calls, cache-create drop) in
-  `tests/tools/runner/recordstep.go`
+  `tests/tools/runner/internal/bench/recordstep.go`
 - 10+ runs per lane at extended scope to tighten the confidence interval
   and characterise the agent-browser outlier rate
 - Model comparison (Haiku vs Sonnet vs Opus)
