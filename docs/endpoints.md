@@ -291,8 +291,10 @@ POST /upload
 POST /tabs/{id}/upload
 GET  /cookies
 POST /cookies
+DELETE /cookies
 GET  /tabs/{id}/cookies
 POST /tabs/{id}/cookies
+DELETE /tabs/{id}/cookies
 GET  /clipboard/read
 POST /clipboard/write
 POST /clipboard/copy
@@ -304,7 +306,7 @@ GET  /cache/status
 Notes:
 
 - download and upload endpoints are gated by `security.allowDownload` and `security.allowUpload`
-- cookie read/write endpoints (`GET/POST /cookies`, plus tab-scoped variants) are gated by `security.allowCookies`; cookie clearing remains available so operators can remove session state
+- cookie read/write endpoints (`GET/POST /cookies`, plus tab-scoped variants) are gated by `security.allowCookies`; `DELETE /cookies` and `DELETE /tabs/{id}/cookies` remain available so operators can remove session state
 - download automatically decompresses `.gz` files and returns the decompressed content
 - `security.downloadAllowedDomains` can whitelist specific domains (bypasses SSRF checks for those domains). Setting `["*"]` matches every host and disables all private-IP protection on the download endpoint.
 - clipboard endpoints are gated by `security.allowClipboard`
