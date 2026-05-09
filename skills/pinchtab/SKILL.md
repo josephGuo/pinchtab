@@ -60,7 +60,7 @@ Rules: only `nav <url>` auto-starts the default local server; `snap`, `text`, `h
 - Do not upload local files unless the user explicitly names the file and the destination flow requires it.
 - Do not save screenshots, PDFs, or downloads to arbitrary paths — use a user-specified path or a safe temporary/workspace directory.
 - Do not use PinchTab to inspect unrelated local files, browser secrets, stored credentials, or system configuration outside the task.
-- Cookie data (`pinchtab cookies`) contains session credentials — do not log, copy, or expose cookie values to untrusted contexts. Use only when the task specifically requires cookie inspection.
+- Cookie access is disabled by default; do not inspect, change, or clear cookies without explicit user approval.
 - Network exports (`pinchtab network-export`) may contain private URLs, auth tokens, and response bodies. Omit `--body` for sensitive sessions. Delete or redact export files after use.
 
 ## Selectors
@@ -217,8 +217,8 @@ These operations are high-impact and gated by security policy. Do not use unless
 
 ```bash
 pinchtab eval "document.title"                      # --await-promise for async; requires security.allowEvaluate: true
-pinchtab download <url> -o /tmp/out.bin             # requires security.allowDownloads: true
-pinchtab upload /absolute/path -s <css>             # requires security.allowUploads: true
+pinchtab download <url> -o /tmp/out.bin             # requires security.allowDownload: true
+pinchtab upload /absolute/path -s <css>             # requires security.allowUpload: true
 ```
 
 - `eval`: narrow read-only DOM inspection unless user asks for mutation. Blocked by default (`security.allowEvaluate: false`).
@@ -240,7 +240,7 @@ Use curl only when the CLI is unavailable. See [api.md](./references/api.md) for
 - `text` confirms success messages / navigation outcomes. Default is Readability-filtered; may drop nav, repeated headlines, short-text nodes, or collapse lists. Use `text --full` (raw `document.body.innerText`) when verifying list/grid/tab/accordion pages, the marker is short, or a default read came back missing content you saw in `snap`.
 - Stale refs after a change are expected — fetch fresh refs instead of retrying.
 - `{"clicked":true,"submitted":true}` means the event fired, **not** that the server accepted or HTML validation passed. Verify via `snap`/`text` — or use `--snap-diff` on the action itself, which already reflects the post-event page state.
-- **Same-origin iframes**: `pinchtab frame <target>` sets a stateful scope inherited by subsequent selector-based `snap`/action/text calls. Target accepts `main`, an iframe ref, CSS for the iframe, a frame name, or a URL. Nested iframes need multiple hops. Full `snap` (no `-i`) flattens same-origin iframe descendants and ref-based actions work across the boundary. **Cross-origin iframes** aren't exposed as scopes — fall back to `eval` against `iframe.contentDocument`. `text --frame <frameId>` takes a 32-char hex `frameId` (from `pinchtab frame` output), not a CSS selector. One-shot read idiom: `FID=$(pinchtab frame '#f' | jq -r .current.frameId); pinchtab frame main; pinchtab text --full --frame "$FID"`.
+- **Same-origin iframes**: Default `snap` (no `-i`) flattens same-origin iframe descendants — nested content appears as regular refs. **Ref-based actions (`click e5`, `fill e3`) work across iframe boundaries without `frame` scope changes.** Only use `frame` when you need scoped `text` reads; chain hops with CSS selectors from the initial snap (`frame '#level-2'; frame '#level-3'; text; frame main`) — skip intermediate snaps. `frame <target>` accepts `main`, an iframe ref, CSS, a frame name, or URL. **Cross-origin iframes** aren't exposed as scopes — fall back to `eval` against `iframe.contentDocument`. `text --frame <frameId>` takes a 32-char hex `frameId` (from `pinchtab frame` output), not a CSS selector.
 - **`eval` → always IIFE** when introducing identifiers. Top-level `const`/`let`/`class` collide across calls in the shared realm (`SyntaxError: Identifier 'x' has already been declared`). Also needed to project `DOMRect` into a JSON-serializable object: `pinchtab eval "(() => { const r = document.querySelector('#x').getBoundingClientRect(); return {x: r.x, y: r.y, w: r.width, h: r.height}; })()"`. Single expressions without identifiers (`document.title`) are fine bare.
 - **`text` reads hidden nodes**: both default and `--full` include `display:none` / `visibility:hidden` content because they read raw DOM. To confirm something is *actually visible*, use `snap` (accessibility tree respects visibility) or `eval` against `offsetHeight` / `getComputedStyle().display`. Common trap: pre-seeded hidden success `<div>` reported by `text` before submission.
 - Compact snap shows `<option>` by visible text, not `value`. `select` accepts either; only `eval + Array.from(select.options)` to debug a no-match.
