@@ -139,6 +139,9 @@ func safeRecordPath(file string) (string, error) {
 	if dirInfo.Mode()&os.ModeSymlink != 0 {
 		return "", fmt.Errorf("output directory %q is a symlink", dir)
 	}
+	if !dirInfo.IsDir() {
+		return "", fmt.Errorf("output directory %q is not a directory", dir)
+	}
 
 	if info, err := os.Lstat(cleaned); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {

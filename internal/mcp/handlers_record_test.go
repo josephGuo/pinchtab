@@ -70,6 +70,17 @@ func TestSafeRecordPath_AcceptsValidPath(t *testing.T) {
 	}
 }
 
+func TestSafeRecordPath_RejectsNonDirectoryParent(t *testing.T) {
+	regular := filepath.Join(t.TempDir(), "afile")
+	if err := os.WriteFile(regular, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := safeRecordPath(filepath.Join(regular, "out.gif"))
+	if err == nil || !strings.Contains(err.Error(), "not a directory") {
+		t.Fatalf("expected not-a-directory error, got %v", err)
+	}
+}
+
 func TestStreamToFile_WritesAndCaps(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "out.gif")
