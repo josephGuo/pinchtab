@@ -46,6 +46,15 @@ func Action(client *http.Client, base, token, kind, selectorArg string, cmd *cob
 		if waitNav {
 			body["waitNav"] = true
 		}
+		mode, _ := cmd.Flags().GetString("mode")
+		if mode != "" {
+			body["mode"] = mode
+		}
+		if mode != "" && cmd.Flags().Changed("humanize") {
+			if humanize, _ := cmd.Flags().GetBool("humanize"); humanize {
+				cli.Fatal("Error: mode and humanize are mutually exclusive")
+			}
+		}
 		// --dismiss-banners only fires when --wait-nav is set; without nav,
 		// banners haven't changed and the dismissal pass would be wasted.
 		if waitNav {
@@ -400,7 +409,12 @@ func ActionSimple(client *http.Client, base, token, kind string, args []string, 
 		setSelectorBody(body, args[0])
 		body["text"] = strings.Join(args[1:], " ")
 	case "press":
-		body["key"] = args[0]
+		if len(args) >= 2 {
+			setSelectorBody(body, args[0])
+			body["key"] = args[1]
+		} else {
+			body["key"] = args[0]
+		}
 	case "scroll":
 		// Precedence: integer pixels > direction keyword > unified selector.
 		// Pixels and directions are short, low-cardinality inputs that would

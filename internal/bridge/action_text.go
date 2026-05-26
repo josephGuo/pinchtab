@@ -56,6 +56,15 @@ func (b *Bridge) actionPress(ctx context.Context, req ActionRequest) (map[string
 	if req.Key == "" {
 		return nil, fmt.Errorf("key required for press")
 	}
+	if req.NodeID > 0 {
+		if err := focusBackendNode(ctx, req.NodeID); err != nil {
+			return nil, err
+		}
+	} else if req.Selector != "" {
+		if err := chromedp.Run(ctx, chromedp.Focus(req.Selector, chromedp.ByQuery)); err != nil {
+			return nil, err
+		}
+	}
 	return map[string]any{"pressed": req.Key}, DispatchNamedKey(ctx, req.Key)
 }
 

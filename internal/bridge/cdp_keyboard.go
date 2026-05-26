@@ -6,13 +6,13 @@ import (
 	"github.com/chromedp/chromedp"
 )
 
-// namedKeyDefs maps friendly key names (as accepted by the CLI "press" command)
-// to their CDP Input.dispatchKeyEvent parameters. Keys not in this table fall
-// through to chromedp.KeyEvent so that single printable characters still work.
+// namedKeyDefs maps friendly key names to CDP Input.dispatchKeyEvent parameters.
+// Keys absent from this table fall through to chromedp.KeyEvent.
+// insertText non-empty → use "keyDown" (fires keypress + default action); empty → "rawKeyDown".
 var namedKeyDefs = map[string]struct {
 	code       string
 	virtualKey int64
-	insertText string // non-empty for keys that produce a character (Enter→\r, Tab→\t)
+	insertText string
 }{
 	"Enter":      {"Enter", 13, "\r"},
 	"Return":     {"Enter", 13, "\r"},
@@ -43,14 +43,8 @@ var namedKeyDefs = map[string]struct {
 	"F12":        {"F12", 123, ""},
 }
 
-// DispatchNamedKey sends proper CDP keyDown / keyUp events for well-known key
-// names (e.g. "Enter", "Tab", "Escape", "ArrowLeft") so that JavaScript event
-// handlers receive a KeyboardEvent with the correct key property.
-//
-// Unlike chromedp.KeyEvent, which treats multi-character strings as text
-// sequences and would type "Enter" as five separate characters, this function
-// consults namedKeyDefs and emits a single logical keystroke. Unrecognised keys
-// fall back to chromedp.KeyEvent so that single printable characters still work.
+// DispatchNamedKey sends CDP keyDown/keyUp for named keys (Enter, Tab, Escape, ArrowLeft …).
+// Unrecognised keys fall back to chromedp.KeyEvent.
 func DispatchNamedKey(ctx context.Context, key string) error {
 	def, ok := namedKeyDefs[key]
 	if !ok {
@@ -75,15 +69,29 @@ func DispatchNamedKey(ctx context.Context, key string) error {
 		})
 	}
 
-	actions := chromedp.Tasks{dispatchEvent("rawKeyDown")}
+	// "keyDown" + text field fires keypress and triggers default actions (form submit, tab advance).
+	// "rawKeyDown" for non-character keys — no keypress needed.
+	downType := "rawKeyDown"
+	var downText string
 	if def.insertText != "" {
-		insertText := def.insertText
-		actions = append(actions, chromedp.ActionFunc(func(ctx context.Context) error {
-			return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.insertText", map[string]any{
-				"text": insertText,
-			}, nil)
-		}))
+		downType = "keyDown"
+		downText = def.insertText
 	}
+	dispatchKeyDown := chromedp.ActionFunc(func(ctx context.Context) error {
+		params := map[string]any{
+			"type":                  downType,
+			"key":                   w3cKey,
+			"code":                  def.code,
+			"windowsVirtualKeyCode": def.virtualKey,
+			"nativeVirtualKeyCode":  def.virtualKey,
+		}
+		if downText != "" {
+			params["text"] = downText
+			params["unmodifiedText"] = downText
+		}
+		return chromedp.FromContext(ctx).Target.Execute(ctx, "Input.dispatchKeyEvent", params, nil)
+	})
+	actions := chromedp.Tasks{dispatchKeyDown}
 	actions = append(actions, dispatchEvent("keyUp"))
 
 	return chromedp.Run(ctx, actions...)
