@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestIsChromeProfileLockError(t *testing.T) {
@@ -163,5 +164,89 @@ func TestClearStaleChromeProfileLockFallsBackToPIDProbe(t *testing.T) {
 	}
 	if _, err := os.Lstat(lockPath); !os.IsNotExist(err) {
 		t.Fatalf("expected lock file to be removed, got err=%v", err)
+	}
+}
+
+func TestIsProfileOwnedByRunningPinchtabTreatsPinchTabPIDWithoutChromeAsStale(t *testing.T) {
+	profileDir := t.TempDir()
+	pidFile := filepath.Join(profileDir, "pinchtab.pid")
+	if err := os.WriteFile(pidFile, []byte("1234"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+	// Backdate the PID file so it falls outside the startup grace window.
+	old := time.Now().Add(-10 * time.Minute)
+	if err := os.Chtimes(pidFile, old, old); err != nil {
+		t.Fatalf("backdate pid file: %v", err)
+	}
+
+	origPID := chromePIDIsRunning
+	origPinchTab := isPinchTabProcessFunc
+	origLister := chromeProfileProcessLister
+	t.Cleanup(func() {
+		chromePIDIsRunning = origPID
+		isPinchTabProcessFunc = origPinchTab
+		chromeProfileProcessLister = origLister
+	})
+
+	chromePIDIsRunning = func(pid int) (bool, error) { return pid == 1234, nil }
+	isPinchTabProcessFunc = func(pid int) bool { return pid == 1234 }
+	chromeProfileProcessLister = func(path string) ([]chromeProfileProcess, error) { return nil, nil }
+
+	owned, _ := isProfileOwnedByRunningPinchtab(profileDir)
+	if owned {
+		t.Fatal("expected stale pinchtab pid with no chrome to be treated as not owned")
+	}
+}
+
+func TestIsProfileOwnedByRunningPinchtabKeepsLockDuringStartup(t *testing.T) {
+	profileDir := t.TempDir()
+	// PID file written just now — Chrome hasn't launched yet (startup window).
+	if err := os.WriteFile(filepath.Join(profileDir, "pinchtab.pid"), []byte("1234"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	origPID := chromePIDIsRunning
+	origPinchTab := isPinchTabProcessFunc
+	origLister := chromeProfileProcessLister
+	t.Cleanup(func() {
+		chromePIDIsRunning = origPID
+		isPinchTabProcessFunc = origPinchTab
+		chromeProfileProcessLister = origLister
+	})
+
+	chromePIDIsRunning = func(pid int) (bool, error) { return pid == 1234, nil }
+	isPinchTabProcessFunc = func(pid int) bool { return pid == 1234 }
+	chromeProfileProcessLister = func(path string) ([]chromeProfileProcess, error) { return nil, nil }
+
+	owned, pid := isProfileOwnedByRunningPinchtab(profileDir)
+	if !owned || pid != 1234 {
+		t.Fatalf("expected lock to be held during startup window, got owned=%v pid=%d", owned, pid)
+	}
+}
+
+func TestIsProfileOwnedByRunningPinchtabKeepsLockWhenChromeUsesProfile(t *testing.T) {
+	profileDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(profileDir, "pinchtab.pid"), []byte("1234"), 0644); err != nil {
+		t.Fatalf("write pid file: %v", err)
+	}
+
+	origPID := chromePIDIsRunning
+	origPinchTab := isPinchTabProcessFunc
+	origLister := chromeProfileProcessLister
+	t.Cleanup(func() {
+		chromePIDIsRunning = origPID
+		isPinchTabProcessFunc = origPinchTab
+		chromeProfileProcessLister = origLister
+	})
+
+	chromePIDIsRunning = func(pid int) (bool, error) { return pid == 1234, nil }
+	isPinchTabProcessFunc = func(pid int) bool { return pid == 1234 }
+	chromeProfileProcessLister = func(path string) ([]chromeProfileProcess, error) {
+		return []chromeProfileProcess{{PID: "99", Command: "/usr/bin/chromium --user-data-dir=" + path}}, nil
+	}
+
+	owned, pid := isProfileOwnedByRunningPinchtab(profileDir)
+	if !owned || pid != 1234 {
+		t.Fatalf("expected profile with active chrome to stay locked, got owned=%v pid=%d", owned, pid)
 	}
 }

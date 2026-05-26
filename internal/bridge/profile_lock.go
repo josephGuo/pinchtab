@@ -21,12 +21,20 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var chromeProfileProcessLister = findChromeProfileProcesses
 var chromePIDIsRunning = isChromePIDRunning
 var killChromeProfileProcesses = killProcesses
 var isProfileOwnedByRunningPinchtabMock = isProfileOwnedByRunningPinchtab
+var isPinchTabProcessFunc = isPinchTabProcess
+
+// lockStartupGrace is the window after a PID file is written during which the
+// Chrome process check is skipped. AcquireProfileLock writes the PID before
+// InitChrome launches the browser, so a second process must not treat the
+// missing Chrome as a stale lock during this startup window.
+var lockStartupGrace = 2 * time.Minute
 
 var chromeSingletonFiles = []string{
 	"SingletonLock",
@@ -138,7 +146,25 @@ func isProfileOwnedByRunningPinchtab(profileDir string) (bool, int) {
 	if err == nil && running {
 		// Even if the PID is running, check if it's actually a pinchtab process
 		// to handle PID reuse.
-		if isPinchTabProcess(pid) {
+		if isPinchTabProcessFunc(pid) {
+			// Skip the Chrome check while the PID file is fresh: AcquireProfileLock
+			// writes the file before InitChrome launches the browser, so a second
+			// process must not steal the lock during that startup window.
+			if info, statErr := os.Stat(pidFile); statErr == nil && time.Since(info.ModTime()) < lockStartupGrace {
+				slog.Debug("profile lock belongs to a recently started pinchtab; treating as active",
+					"profile", profileDir, "pid", pid)
+				return true, pid
+			}
+			processes, procErr := chromeProfileProcessLister(profileDir)
+			if procErr == nil && len(processes) == 0 {
+				slog.Debug("pinchtab pid file points to a running pinchtab but no chrome is using the profile; treating lock as stale",
+					"profile", profileDir, "pid", pid)
+				return false, 0
+			}
+			if procErr != nil {
+				slog.Debug("unable to verify chrome ownership for running pinchtab pid; keeping profile locked",
+					"profile", profileDir, "pid", pid, "err", procErr)
+			}
 			slog.Debug("profile is owned by another active pinchtab", "profile", profileDir, "pid", pid)
 			return true, pid
 		}

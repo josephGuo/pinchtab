@@ -76,9 +76,16 @@ run_stealth_level_matrix() {
       assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'true' "status enables iframe isolation at medium"
     else
       assert_json_eq "$RESULT" '.capabilities.iframeIsolation' 'false' "status keeps iframe isolation disabled at full"
+      assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'true' "status enables toString masking at full"
     fi
-    assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium+"
-    assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium+"
+    if [ "$STEALTH_LEVEL" = "full" ]; then
+      assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'true' "status enables stack sanitization at full"
+    else
+      assert_json_eq "$RESULT" '.capabilities.errorStackSanitized' 'false' "status keeps stack sanitization disabled at medium"
+    fi
+    if [ "$STEALTH_LEVEL" != "full" ]; then
+      assert_json_eq "$RESULT" '.capabilities.functionToStringMasked' 'false' "status keeps toString masking disabled at medium"
+    fi
     assert_json_eq "$RESULT" '.capabilities.functionToStringNative' 'true' "status keeps native Function.prototype.toString at medium+"
   fi
   assert_json_eq "$RESULT" '.capabilities.intlLocaleCoherent' 'true' "status reports locale coherence"
@@ -153,8 +160,9 @@ run_stealth_level_matrix() {
   else
     assert_eval_poll "window.__stealthCapabilities.chromeRuntimeConnect" "false" "connect remains absent at full"
     assert_eval_poll "window.__stealthCapabilities.iframeIsolation" "false" "iframe isolation remains absent at full"
-    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "false" "stack sanitization remains absent at full"
-    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "false" "native-looking toString masking remains absent at full"
+    assert_eval_poll "window.__stealthCapabilities.errorStackSanitized" "true" "stack sanitization is active at full"
+    assert_eval_poll "window.__stealthCapabilities.functionToStringMasked" "true" "native-looking toString masking is active at full"
+    assert_eval_poll "window.__stealthCapabilities.iframeFunctionToStringParity" "true" "same-origin iframes get consistent toString masking at full"
   fi
   assert_eval_poll "window.__stealthCapabilities.functionToStringNative" "true" "Function.prototype.toString remains native-like"
   assert_eval_poll "window.__stealthCapabilities.webdriverDescriptorNativeLike" "true" "webdriver descriptor getter stays native-like"
@@ -404,30 +412,6 @@ run_stealth_level_matrix() {
 
   E2E_SERVER="$ORIG_URL"
 }
-
-if [ "${STEALTH_MATRIX:-0}" = "1" ]; then
-  matrix_levels=()
-  if [ -n "${STEALTH_LEVEL:-}" ]; then
-    matrix_levels=("${STEALTH_LEVEL}")
-  else
-    matrix_levels=(light medium full)
-  fi
-
-  original_level="${STEALTH_LEVEL:-}"
-  for matrix_level in "${matrix_levels[@]}"; do
-    STEALTH_LEVEL="${matrix_level}"
-    run_stealth_level_matrix
-  done
-  if [ -n "${original_level}" ]; then
-    STEALTH_LEVEL="${original_level}"
-  else
-    unset STEALTH_LEVEL
-  fi
-  if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    finish_suite
-  fi
-  return 0
-fi
 
 # Adds the heavier heuristics and secure-instance smoke checks on top of the
 # baseline coverage in 45-bot-detection.sh.
