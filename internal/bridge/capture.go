@@ -69,12 +69,15 @@ type PairedResult struct {
 	Refs   map[string]int64
 }
 
-// PairedCapture runs a screenshot and an accessibility snapshot under the same
-// chromedp context. The atomicity guarantee is "no main-frame navigation
-// between the two CDP calls" — checked by comparing the main frame's loaderId
-// before and after the capture window. Drift inside the same document
-// (re-renders, observer mutations) is out of scope for P1; later phases add
-// wait:stable and bounding-box harvesting.
+// PairedCapture runs a screenshot and an accessibility snapshot under the
+// same chromedp context. The atomicity guarantee is "no main-frame
+// navigation between the two CDP calls" — checked by comparing the main
+// frame's loaderId before and after the capture window. opts.Wait == "stable"
+// adds a Page.lifecycleEvent quiet-window wait before the window opens.
+// opts.WithBounds populates a viewport- or document-relative BoundingBox per
+// snapshot node via DOM.getBoxModel. Residual risk: in-document churn (React
+// re-renders, IntersectionObserver mutations) is not detected — wait:stable
+// reduces but does not eliminate it.
 func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error) {
 	start := time.Now()
 	res := &PairedResult{
@@ -104,6 +107,15 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	res.FrameID = pre.Frame.ID
 	res.LoaderID = pre.Frame.LoaderID
 
+	// Layout metrics: captured BEFORE the screenshot so opts.Image.Scale can
+	// synthesize a viewport-covering clip when no other clip is set. Also
+	// populates the response viewport / devicePixelRatio for clients.
+	if vp, err := FetchLayout(ctx); err == nil {
+		res.Viewport = vp
+		opts.Image.ViewportWidth = vp.Width
+		opts.Image.ViewportHeight = vp.Height
+	}
+
 	// Image first. Order matters only when BeyondViewport is true (P3 concern);
 	// at viewport scale either order is equivalent.
 	imgBytes, err := CaptureScreenshot(ctx, opts.Image)
@@ -116,6 +128,9 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 	rawNodes, err := FetchAXTree(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if opts.ScopeFrameID != "" {
+		rawNodes = filterAXNodesByFrame(rawNodes, opts.ScopeFrameID)
 	}
 	if opts.ScopeBackendNodeID != 0 {
 		rawNodes = FilterSubtree(rawNodes, opts.ScopeBackendNodeID)
@@ -131,12 +146,6 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 		chromedp.Title(&res.Title),
 	)
 
-	// Layout metrics: needed both for the response (viewport, devicePixelRatio)
-	// and for the bounds visibility heuristic. Captured AFTER the screenshot so
-	// that beyondViewport's reflow side effects are reflected.
-	if vp, err := FetchLayout(ctx); err == nil {
-		res.Viewport = vp
-	}
 	pageCoords := opts.Image.BeyondViewport
 	if pageCoords {
 		res.CoordinateSpace = "document"
@@ -164,6 +173,23 @@ func PairedCapture(ctx context.Context, opts CaptureOpts) (*PairedResult, error)
 
 func imageFormatString(f page.CaptureScreenshotFormat) string {
 	return string(f)
+}
+
+// filterAXNodesByFrame mirrors handlers.scopeSnapshotNodesByFrame: drop any
+// AX node whose FrameID does not match the active frame scope. Lives here so
+// PairedCapture can honor /frame state without the handler having to
+// post-process the result.
+func filterAXNodesByFrame(nodes []RawAXNode, frameID string) []RawAXNode {
+	if frameID == "" {
+		return nodes
+	}
+	filtered := make([]RawAXNode, 0, len(nodes))
+	for _, n := range nodes {
+		if n.FrameID == frameID {
+			filtered = append(filtered, n)
+		}
+	}
+	return filtered
 }
 
 // mintDomEpoch returns an opaque token unique per paired capture. The token

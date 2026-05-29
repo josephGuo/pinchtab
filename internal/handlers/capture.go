@@ -75,6 +75,15 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	reqNoAnim := q.Get("noAnimations") == "true"
 	beyondViewport := q.Get("beyondViewport") == "true" || q.Get("beyondViewport") == "1"
 
+	// scale rescales the rendered bitmap. Default 1 (native). 0.5 halves
+	// each axis (quarter of the pixels).
+	scale := 1.0
+	if s := q.Get("scale"); s != "" {
+		if sf, err := strconv.ParseFloat(s, 64); err == nil && sf > 0 {
+			scale = sf
+		}
+	}
+
 	// Default withBounds=true. Bounding boxes are the piece that lets vision
 	// agents overlay refs on pixels — the whole point of /capture. Callers
 	// who want to skip the per-node box-model round trips can pass
@@ -130,9 +139,11 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 			Format:         format,
 			Quality:        quality,
 			BeyondViewport: beyondViewport,
+			Scale:          scale,
 		},
 		Filter:            filter,
 		MaxDepth:          depth,
+		ScopeFrameID:      h.selectorFrameID(resolvedTabID),
 		DisableAnimations: reqNoAnim && !h.Config.NoAnimations,
 		Wait:              wait,
 		WithBounds:        withBounds,
@@ -150,7 +161,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.ScopeBackendNodeID = nodeID
-		clip, cErr := screenshotClipForNode(tCtx, nodeID, false)
+		clip, cErr := screenshotClipForNode(tCtx, nodeID)
 		if cErr != nil {
 			httpx.Error(w, 500, fmt.Errorf("selector clip: %w", cErr))
 			return
@@ -168,6 +179,13 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 	if requirePair && result.Navigated {
 		httpx.Error(w, http.StatusConflict,
 			fmt.Errorf("pairing broken: navigation observed during capture window"))
+		return
+	}
+
+	// IDPI scan: same contract as HandleSnapshot. Run before any file write
+	// so a blocked capture doesn't leave an orphan image on disk.
+	idpiResult := h.scanSnapshotIDPI(w, result.Nodes)
+	if idpiResult.Blocked {
 		return
 	}
 
@@ -229,7 +247,7 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	httpx.JSON(w, 200, map[string]any{
+	resp := map[string]any{
 		"status":     "ok",
 		"tabId":      resolvedTabID,
 		"url":        result.URL,
@@ -250,7 +268,15 @@ func (h *Handlers) HandleCapture(w http.ResponseWriter, r *http.Request) {
 			"nodeCount": len(result.Nodes),
 			"nodes":     result.Nodes,
 		},
-	})
+	}
+	if idpiResult.Threat {
+		resp["idpiWarning"] = idpiResult.Reason
+	}
+	if idpiResult.WrapContent {
+		resp["untrustedContent"] = true
+		resp["idpiNotice"] = idpiNoticeText
+	}
+	httpx.JSON(w, 200, resp)
 }
 
 // HandleTabCapture is the /tabs/{id}/capture variant — same handler, path-bound tab.

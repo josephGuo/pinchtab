@@ -35,7 +35,7 @@ func allTools() []mcp.Tool {
 			mcp.WithString("selector", mcp.Description("Unified selector. Without annotate it clips the screenshot to the element. With annotate=true it narrows which elements receive overlay boxes (default: all interactive elements).")),
 			mcp.WithString("format", mcp.Description("Image format: 'jpeg' (default) or 'png'")),
 			mcp.WithNumber("quality", mcp.Description("JPEG quality 0-100 (only for JPEG format)")),
-			mcp.WithBoolean("css1x", mcp.Description("When selector is set (without annotate), return element screenshot at CSS pixel size (1x) instead of device pixels")),
+			mcp.WithNumber("scale", mcp.Description("Rescale the output image bitmap. Default 1 (native). 0.5 halves each axis (quarter of the pixels).")),
 			mcp.WithBoolean("annotate", mcp.Description("Overlay numbered ref boxes on interactive elements (or on selector matches). Returns the image plus a structured list of {ref, role, name, box}.")),
 			mcp.WithBoolean("beyondViewport", mcp.Description("Capture the entire scrollable document, not just the visible viewport. Box coordinates in the annotations envelope are document-relative when this is true. Ignored when selector is set.")),
 		),

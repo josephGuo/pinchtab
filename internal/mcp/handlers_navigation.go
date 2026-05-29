@@ -144,8 +144,8 @@ func handleScreenshot(c *Client) func(context.Context, mcp.CallToolRequest) (*mc
 		if selector := optString(r, "selector"); selector != "" {
 			q.Set("selector", selector)
 		}
-		if v, ok := optBool(r, "css1x"); ok && v {
-			q.Set("css1x", "true")
+		if scale, ok := optFloat(r, "scale"); ok && scale > 0 {
+			q.Set("scale", fmt.Sprintf("%g", scale))
 		}
 		if v, ok := optBool(r, "beyondViewport"); ok && v {
 			q.Set("beyondViewport", "true")

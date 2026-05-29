@@ -95,14 +95,17 @@ func TestHandleCapture_WaitParamParses(t *testing.T) {
 }
 
 func TestHandleCapture_BoundsAndBeyondViewportParse(t *testing.T) {
-	// withBounds and beyondViewport must parse without crashing — they are
-	// the headline P3 query params and the handler should at minimum
-	// validate them before hitting the tab lookup.
+	// withBounds, beyondViewport, and scale must parse without crashing —
+	// the handler should at minimum validate them before hitting the tab
+	// lookup.
 	cases := []string{
 		"/capture?withBounds=true&beyondViewport=true",
 		"/capture?withBounds=false",
 		"/capture?beyondViewport=1",
 		"/capture?withBounds=0&beyondViewport=0",
+		"/capture?scale=0.5",
+		"/capture?scale=2.0",
+		"/capture?scale=not-a-number",
 	}
 	for _, url := range cases {
 		h := New(&mockBridge{failTab: true}, &config.RuntimeConfig{}, nil, nil, nil)

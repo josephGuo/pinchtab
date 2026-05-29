@@ -241,7 +241,7 @@ func configureBrowserFlags() {
 	screenshotCmd.Flags().StringP("output", "o", "", "Save screenshot to file path")
 	screenshotCmd.Flags().StringP("quality", "q", "", "JPEG quality (0-100)")
 	screenshotCmd.Flags().StringP("selector", "s", "", "Element selector to capture (ref/CSS/XPath/text)")
-	screenshotCmd.Flags().Bool("css-1x", false, "When used with --selector, output image at CSS pixel size instead of device pixels")
+	screenshotCmd.Flags().String("scale", "", "Rescale the output image (e.g. 0.5 = half size, 0.25 = quarter). Default 1.")
 	screenshotCmd.Flags().Bool("annotate", false, "Overlay numbered ref boxes on interactive elements (or on --selector matches). Prints a [n] ref legend to stdout.")
 	screenshotCmd.Flags().String("format", "", "Image format: 'jpeg' (default) or 'png'")
 	screenshotCmd.Flags().Bool("beyond-viewport", false, "Capture the entire scrollable document, not just the visible viewport. Ignored when --selector is set.")
@@ -255,7 +255,9 @@ func configureBrowserFlags() {
 	captureCmd.Flags().String("wait", "", "Lifecycle wait: stable (default) | load | none")
 	captureCmd.Flags().Bool("with-bounds", true, "Populate boundingBox per snapshot node (default true)")
 	captureCmd.Flags().Bool("beyond-viewport", false, "Capture the entire scrollable document; coordinate space becomes 'document'")
+	captureCmd.Flags().String("scale", "", "Rescale the output image (e.g. 0.5 = half size, 0.25 = quarter). Default 1.")
 	captureCmd.Flags().Bool("require-pair", false, "Return 409 if navigation is observed during the capture window")
+	captureCmd.Flags().Bool("json", false, "Output full JSON response instead of terse summary")
 
 	pdfCmd.Flags().StringP("output", "o", "", "Save PDF to file path")
 	pdfCmd.Flags().Bool("landscape", false, "Landscape orientation")

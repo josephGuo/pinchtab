@@ -7,22 +7,24 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/cli"
 	"github.com/pinchtab/pinchtab/internal/cli/apiclient"
+	"github.com/pinchtab/pinchtab/internal/cli/output"
 	"github.com/spf13/cobra"
 )
 
-// Capture is the CLI shim for `pinchtab capture`. Requests an inline
-// (base64) capture so we can both write the image locally and print the
-// snapshot summary in one round trip. Mirrors how `pinchtab screenshot`
-// localizes the file.
+// Capture is the CLI shim for `pinchtab capture`. Default output is the
+// agent-friendly terse form (image path + epoch/pairing/viewport line +
+// compact snapshot). --json dumps the full server envelope.
 func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	params := url.Values{}
 	params.Set("output", "inline")
 
 	outFile, _ := cmd.Flags().GetString("output")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+
 	format, _ := cmd.Flags().GetString("format")
 	if format == "" {
 		format = "jpeg"
@@ -49,10 +51,12 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetBool("beyond-viewport"); v {
 		params.Set("beyondViewport", "true")
 	}
+	if v, _ := cmd.Flags().GetString("scale"); v != "" {
+		params.Set("scale", v)
+	}
 	if v, _ := cmd.Flags().GetBool("require-pair"); v {
 		params.Set("requirePair", "true")
 	}
-	// --with-bounds defaults true on the server; explicit false suppresses.
 	if cmd.Flags().Changed("with-bounds") {
 		if v, _ := cmd.Flags().GetBool("with-bounds"); !v {
 			params.Set("withBounds", "false")
@@ -67,36 +71,15 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 		return
 	}
 
-	var resp struct {
-		Status string `json:"status"`
-		TabID  string `json:"tabId"`
-		URL    string `json:"url"`
-		Title  string `json:"title"`
-		Epoch  struct {
-			FrameID  string `json:"frameId"`
-			LoaderID string `json:"loaderId"`
-			DomEpoch string `json:"domEpoch"`
-		} `json:"epoch"`
-		Pairing struct {
-			Navigated         bool  `json:"navigated"`
-			CaptureDurationMs int64 `json:"captureDurationMs"`
-		} `json:"pairing"`
-		Image struct {
-			Format          string  `json:"format"`
-			Base64          string  `json:"base64"`
-			Bytes           int     `json:"bytes"`
-			CoordinateSpace string  `json:"coordinateSpace"`
-			DPR             float64 `json:"devicePixelRatio"`
-		} `json:"image"`
-		Snapshot struct {
-			Filter    string `json:"filter"`
-			NodeCount int    `json:"nodeCount"`
-		} `json:"snapshot"`
-	}
+	var resp captureResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
-		cli.Fatal("Decode capture response: %v", err)
+		output.Error("capture", fmt.Sprintf("decode response: %v", err), output.ExitRuntime)
+		return
 	}
 
+	// Always materialize the image locally — both terse and --json callers
+	// need the file. --json mode still prints the base64 envelope so
+	// pipelines that prefer inline bytes can keep using it.
 	ext := ".jpg"
 	if resp.Image.Format == "png" {
 		ext = ".png"
@@ -106,27 +89,114 @@ func Capture(client *http.Client, base, token string, cmd *cobra.Command) {
 	}
 	img, err := base64.StdEncoding.DecodeString(resp.Image.Base64)
 	if err != nil {
-		cli.Fatal("Decode image bytes: %v", err)
+		output.Error("capture", fmt.Sprintf("decode image bytes: %v", err), output.ExitRuntime)
+		return
 	}
 	if err := os.WriteFile(outFile, img, 0600); err != nil {
-		cli.Fatal("Write image: %v", err)
+		output.Error("capture", fmt.Sprintf("write image: %v", err), output.ExitRuntime)
+		return
 	}
 
-	fmt.Println(cli.StyleStdout(cli.SuccessStyle,
-		fmt.Sprintf("Saved %s (%d bytes, %s)", outFile, len(img), resp.Image.CoordinateSpace)))
-	fmt.Printf("  url:      %s\n", resp.URL)
-	fmt.Printf("  title:    %s\n", resp.Title)
-	fmt.Printf("  epoch:    %s (frame=%s loader=%s)\n",
-		resp.Epoch.DomEpoch, short(resp.Epoch.FrameID), short(resp.Epoch.LoaderID))
-	fmt.Printf("  pairing:  navigated=%v  duration=%dms\n",
-		resp.Pairing.Navigated, resp.Pairing.CaptureDurationMs)
-	fmt.Printf("  snapshot: %d nodes (filter=%q)\n",
-		resp.Snapshot.NodeCount, resp.Snapshot.Filter)
+	if jsonOutput {
+		// Echo what the server sent, pretty-printed. The base64 stays in
+		// place for callers who want inline bytes; outFile is where we
+		// wrote the decoded copy.
+		var pretty map[string]any
+		if err := json.Unmarshal(raw, &pretty); err == nil {
+			output.JSON(pretty)
+		} else {
+			fmt.Println(string(raw))
+		}
+		return
+	}
+
+	output.Value(fmt.Sprintf("saved %s (%d bytes)", outFile, len(img)))
+	output.Value(fmt.Sprintf("url: %s", resp.URL))
+	if resp.Title != "" {
+		output.Value(fmt.Sprintf("title: %s", resp.Title))
+	}
+	output.Value(fmt.Sprintf("epoch: %s navigated=%v duration=%dms",
+		resp.Epoch.DomEpoch, resp.Pairing.Navigated, resp.Pairing.CaptureDurationMs))
+	output.Value(fmt.Sprintf("viewport: %.0fx%.0f dpr=%g space=%s",
+		resp.Image.Viewport.W, resp.Image.Viewport.H, resp.Image.DPR, resp.Image.CoordinateSpace))
+
+	if len(resp.Snapshot.Nodes) > 0 {
+		fmt.Println()
+		filter := resp.Snapshot.Filter
+		if filter == "" {
+			filter = "all"
+		}
+		output.Value(fmt.Sprintf("snapshot: %d nodes (%s)", resp.Snapshot.NodeCount, filter))
+		for _, n := range resp.Snapshot.Nodes {
+			output.Value(formatCaptureNode(n))
+		}
+	}
+
+	if resp.IDPIWarning != "" {
+		output.Hint("idpi: " + resp.IDPIWarning)
+	}
 }
 
-func short(s string) string {
-	if len(s) <= 8 {
-		return s
+type captureResponse struct {
+	Status     string `json:"status"`
+	TabID      string `json:"tabId"`
+	URL        string `json:"url"`
+	Title      string `json:"title"`
+	CapturedAt string `json:"capturedAt"`
+	Epoch      struct {
+		FrameID  string `json:"frameId"`
+		LoaderID string `json:"loaderId"`
+		DomEpoch string `json:"domEpoch"`
+	} `json:"epoch"`
+	Pairing struct {
+		Navigated         bool  `json:"navigated"`
+		CaptureDurationMs int64 `json:"captureDurationMs"`
+	} `json:"pairing"`
+	Image struct {
+		Format          string  `json:"format"`
+		Base64          string  `json:"base64"`
+		Bytes           int     `json:"bytes"`
+		CoordinateSpace string  `json:"coordinateSpace"`
+		DPR             float64 `json:"devicePixelRatio"`
+		Viewport        struct {
+			W, H, ScrollX, ScrollY float64
+		} `json:"viewport"`
+	} `json:"image"`
+	Snapshot struct {
+		Filter    string            `json:"filter"`
+		NodeCount int               `json:"nodeCount"`
+		Nodes     []captureNodeWire `json:"nodes"`
+	} `json:"snapshot"`
+	IDPIWarning string `json:"idpiWarning,omitempty"`
+}
+
+type captureNodeWire struct {
+	Ref         string `json:"ref"`
+	Role        string `json:"role"`
+	Name        string `json:"name"`
+	Value       string `json:"value,omitempty"`
+	BoundingBox *struct {
+		X, Y, W, H float64
+	} `json:"boundingBox,omitempty"`
+	Visible bool `json:"visible,omitempty"`
+}
+
+// formatCaptureNode renders one node like snap's compact line, with bounds
+// appended when present: [eN] role "name" (x,y wxh).
+func formatCaptureNode(n captureNodeWire) string {
+	var b strings.Builder
+	b.WriteString("[")
+	b.WriteString(n.Ref)
+	b.WriteString("] ")
+	b.WriteString(n.Role)
+	if n.Name != "" {
+		b.WriteString(" \"")
+		b.WriteString(n.Name)
+		b.WriteString("\"")
 	}
-	return s[:8] + "…"
+	if n.BoundingBox != nil {
+		fmt.Fprintf(&b, " (%.0f,%.0f %.0fx%.0f)",
+			n.BoundingBox.X, n.BoundingBox.Y, n.BoundingBox.W, n.BoundingBox.H)
+	}
+	return b.String()
 }

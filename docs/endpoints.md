@@ -264,6 +264,8 @@ Screenshot query parameters:
 - `raw=true`
 - `output=file`
 - `noAnimations=true`
+- `scale=<float>` — rescale the output bitmap (e.g. `0.5` = half size,
+  `0.25` = quarter). Default `1`.
 
 `/capture` returns a screenshot and an accessibility snapshot from the same
 DOM epoch in a single call. It is the vision-grounded alternative to issuing
@@ -282,6 +284,11 @@ Capture query parameters:
 - `output=file|inline|raw` — default `file`
 - `requirePair=true` — return `409 Conflict` when navigation is observed during the capture window
 - `noAnimations=true`
+- `scale=<float>` — rescale the output image via CDP's `clip.scale`.
+  Default `1` (native pixels). `scale=0.5` halves each axis (quarter of
+  the pixels). `image.devicePixelRatio` in the response tells you what
+  your native DPR was, so you can compute CSS-pixel equivalence if you
+  need to.
 - `wait=stable|load|none` — default `stable`. `stable` waits for
   `Page.lifecycleEvent` quiescence (250ms of silence, 750ms ceiling) before
   opening the capture window so the screenshot and the AX-tree describe a
