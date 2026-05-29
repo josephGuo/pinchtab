@@ -194,7 +194,7 @@ func TestHandleScreenshot(t *testing.T) {
 	r := callTool(t, "pinchtab_screenshot", map[string]any{
 		"quality":        float64(90),
 		"selector":       "#hero",
-		"css1x":          true,
+		"scale":          float64(0.5),
 		"beyondViewport": true,
 	}, srv)
 
@@ -205,8 +205,8 @@ func TestHandleScreenshot(t *testing.T) {
 	if !strings.Contains(text, `"selector"`) {
 		t.Errorf("expected selector query param, got %s", text)
 	}
-	if !strings.Contains(text, `"css1x"`) {
-		t.Errorf("expected css1x query param, got %s", text)
+	if !strings.Contains(text, `"scale"`) {
+		t.Errorf("expected scale query param, got %s", text)
 	}
 	if !strings.Contains(text, `"beyondViewport"`) {
 		t.Errorf("expected beyondViewport query param, got %s", text)

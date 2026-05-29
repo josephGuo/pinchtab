@@ -34,7 +34,6 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 	tabID := r.URL.Query().Get("tabId")
 	output := r.URL.Query().Get("output")
 	selector := r.URL.Query().Get("selector")
-	css1x := r.URL.Query().Get("css1x") == "true"
 	reqNoAnim := r.URL.Query().Get("noAnimations") == "true"
 	annotate := r.URL.Query().Get("annotate") == "true" || r.URL.Query().Get("annotate") == "1"
 	// beyondViewport captures the full scrollable document. selector wins
@@ -107,7 +106,7 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 			httpx.Error(w, 400, frameScopedSelectorError("selector", err))
 			return
 		}
-		clip, err = screenshotClipForNode(tCtx, nodeID, css1x)
+		clip, err = screenshotClipForNode(tCtx, nodeID)
 		if err != nil {
 			httpx.Error(w, 500, fmt.Errorf("selector screenshot: %w", err))
 			return
@@ -139,23 +138,20 @@ func (h *Handlers) HandleScreenshot(w http.ResponseWriter, r *http.Request) {
 		ext = ".png"
 	}
 
-	if err := chromedp.Run(tCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			shot := page.CaptureScreenshot().WithFormat(format)
-			if clip != nil {
-				shot = shot.WithClip(clip)
-			}
-			if beyondViewport {
-				shot = shot.WithCaptureBeyondViewport(true)
-			}
-			if format == page.CaptureScreenshotFormatJpeg {
-				shot = shot.WithQuality(int64(quality))
-			}
-			buf, err = shot.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	scale := 1.0
+	if s := r.URL.Query().Get("scale"); s != "" {
+		if sf, err := strconv.ParseFloat(s, 64); err == nil {
+			scale = bridge.ClampScale(sf)
+		}
+	}
+	buf, err = bridge.CaptureScreenshot(tCtx, bridge.ScreenshotOpts{
+		Format:         format,
+		Quality:        quality,
+		Clip:           clip,
+		BeyondViewport: beyondViewport,
+		Scale:          scale,
+	})
+	if err != nil {
 		httpx.Error(w, 500, fmt.Errorf("screenshot: %w", err))
 		return
 	}
@@ -220,7 +216,7 @@ func (h *Handlers) HandleTabScreenshot(w http.ResponseWriter, r *http.Request) {
 	h.HandleScreenshot(w, req)
 }
 
-func screenshotClipForNode(ctx context.Context, nodeID int64, css1x bool) (*page.Viewport, error) {
+func screenshotClipForNode(ctx context.Context, nodeID int64) (*page.Viewport, error) {
 	// Bring target element into view before computing clip coordinates.
 	if err := chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		return chromedp.FromContext(ctx).Target.Execute(ctx, "DOM.scrollIntoViewIfNeeded", map[string]any{
@@ -275,13 +271,7 @@ func screenshotClipForNode(ctx context.Context, nodeID int64, css1x bool) (*page
 			// Cross-origin ancestors can block frame traversal. Keep the deepest
 			// reachable page coordinates in that case.
 		}
-		return {
-			x,
-			y,
-			width: rect.width,
-			height: rect.height,
-			dpr: window.devicePixelRatio || 1
-		};
+		return { x, y, width: rect.width, height: rect.height };
 	}`
 
 	var callResult json.RawMessage
@@ -302,7 +292,6 @@ func screenshotClipForNode(ctx context.Context, nodeID int64, css1x bool) (*page
 				Y      float64 `json:"y"`
 				Width  float64 `json:"width"`
 				Height float64 `json:"height"`
-				DPR    float64 `json:"dpr"`
 			} `json:"value"`
 		} `json:"result"`
 	}
@@ -314,19 +303,11 @@ func screenshotClipForNode(ctx context.Context, nodeID int64, css1x bool) (*page
 	if box.Width <= 0 || box.Height <= 0 {
 		return nil, fmt.Errorf("element box is empty (width=%.2f height=%.2f)", box.Width, box.Height)
 	}
-	scale := 1.0
-	if css1x {
-		if box.DPR <= 0 {
-			box.DPR = 1
-		}
-		scale = 1 / box.DPR
-	}
-
 	return &page.Viewport{
 		X:      box.X,
 		Y:      box.Y,
 		Width:  box.Width,
 		Height: box.Height,
-		Scale:  scale,
+		Scale:  1,
 	}, nil
 }

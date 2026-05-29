@@ -211,8 +211,14 @@ pinchtab screenshot                     # Save a screenshot to a generated .jpg 
 pinchtab screenshot -o <path>           # Save screenshot to a chosen path
 pinchtab screenshot -q <0-100>          # JPEG quality
 pinchtab screenshot -s <selector>       # Capture a specific element by selector
-pinchtab screenshot -s <selector> --css-1x # Export selector screenshot at CSS pixel size
+pinchtab screenshot --scale 0.5         # Half-size output (quarter the pixels)
 pinchtab screenshot --beyond-viewport   # Capture the full scrollable document (ignored with -s)
+pinchtab capture                        # Paired screenshot + accessibility snapshot from the same DOM epoch
+pinchtab capture -o <path>              # Save the paired image to a chosen path
+pinchtab capture --beyond-viewport      # Capture the full document; bounds in page coords
+pinchtab capture --require-pair         # Fail (409) if the page navigated mid-capture
+pinchtab capture --with-bounds=false    # Skip per-node DOM.getBoxModel round trips
+pinchtab capture --scale 0.5            # Half-size image (snapshot/bounds unchanged)
 pinchtab pdf                            # Export the active page as PDF
 pinchtab pdf -o <path>                  # Save PDF to a chosen path
 pinchtab pdf --landscape                # Landscape orientation
@@ -287,6 +293,7 @@ Commands with `--tab` currently include:
 - `reload`
 - `snap`
 - `screenshot`
+- `capture`
 - `pdf`
 - `find`
 - `text`

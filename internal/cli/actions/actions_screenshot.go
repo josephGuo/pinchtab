@@ -47,8 +47,8 @@ func Screenshot(client *http.Client, base, token string, cmd *cobra.Command) {
 	if v, _ := cmd.Flags().GetString("selector"); v != "" {
 		params.Set("selector", v)
 	}
-	if v, _ := cmd.Flags().GetBool("css-1x"); v {
-		params.Set("css1x", "true")
+	if v, _ := cmd.Flags().GetString("scale"); v != "" {
+		params.Set("scale", v)
 	}
 	if v, _ := cmd.Flags().GetBool("beyond-viewport"); v {
 		params.Set("beyondViewport", "true")
