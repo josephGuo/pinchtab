@@ -14,6 +14,7 @@ import (
 
 	"github.com/pinchtab/pinchtab/internal/bridge"
 	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/pinchtab/internal/httpx"
 	"github.com/pinchtab/pinchtab/internal/ids"
 	"github.com/pinchtab/pinchtab/internal/instance"
 	"github.com/pinchtab/pinchtab/internal/profiles"
@@ -145,20 +146,11 @@ func NewOrchestrator(baseDir string) *Orchestrator {
 
 func NewOrchestratorWithRunner(baseDir string, runner HostRunner) *Orchestrator {
 	orch := &Orchestrator{
-		instances: make(map[string]*InstanceInternal),
-		baseDir:   baseDir,
-		binary:    resolveStableBinary(baseDir),
-		runner:    runner,
-		// Client timeout for proxying to instances: 60 seconds
-		// Why so high?
-		// - First request to an instance triggers lazy Chrome initialization (8-20+ seconds)
-		// - Navigation can take up to 60s (NavigateTimeout in bridge config)
-		// - Proxied requests (e.g., POST /tabs/{tabId}/navigate) must wait for:
-		//   1. Instance /health handler to initialize the browser
-		//   2. Tab operations to complete (navigate, snapshot, actions, etc.)
-		// - Short timeout (<5s) would break first-request scenarios
-		// See: internal/orchestrator/health.go (monitor), internal/bridge/init.go (InitBrowser)
-		client:         &http.Client{Timeout: 60 * time.Second},
+		instances:      make(map[string]*InstanceInternal),
+		baseDir:        baseDir,
+		binary:         resolveStableBinary(baseDir),
+		runner:         runner,
+		client:         &http.Client{Timeout: httpx.MaxNavigationHTTPDuration},
 		childAuthToken: "",
 		allowEvaluate:  false,
 		internalToken:  generateInternalToken(),
@@ -248,8 +240,19 @@ func (o *Orchestrator) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			o.bindings.PruneAgents(idleTTL, maxAgent)
+			o.runMaintenanceOnce(idleTTL, maxAgent)
 		}
+	}
+}
+
+// runMaintenanceOnce bounds the caches that nothing else prunes. Agent bindings
+// have no lifecycle signal, and the tab→instance cache misses every tab that
+// closes without passing through the proxy — bridge-side idle eviction and
+// window.close() among them — so both need periodic reconciliation.
+func (o *Orchestrator) runMaintenanceOnce(idleTTL time.Duration, maxAgent int) {
+	o.bindings.PruneAgents(idleTTL, maxAgent)
+	if o.instanceMgr != nil {
+		o.instanceMgr.Locator.RefreshAll()
 	}
 }
 

@@ -10,16 +10,12 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/pinchtab/pinchtab/internal/activity"
 	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
-// DefaultClient is the shared HTTP client for proxy requests.
-// A 60-second timeout accommodates lazy Chrome initialization (8-20s)
-// and tab navigation (up to 60s for NavigateTimeout in bridge config).
-var DefaultClient = &http.Client{Timeout: 60 * time.Second}
+var DefaultClient = &http.Client{Timeout: httpx.MaxNavigationHTTPDuration}
 
 type Options struct {
 	Client            *http.Client
@@ -32,18 +28,19 @@ type Options struct {
 	OnResponse func(origReq *http.Request, body []byte)
 }
 
-var hopByHopHeaders = map[string]struct{}{
-	"connection":          {},
-	"keep-alive":          {},
-	"proxy-authenticate":  {},
-	"proxy-authorization": {},
-	"te":                  {},
-	"trailers":            {},
-	"transfer-encoding":   {},
-	"upgrade":             {},
-	"host":                {},
-}
-
+// strippedProxyRequestHeaders never reach the instance by being COPIED. Every member is
+// dropped from the blind copy; x-request-id is then re-added deliberately by
+// httpx.ForwardRequestID, which is what makes one proxied request traceable in both the
+// outer and the instance log instead of only the outer one.
+//
+// It stays on this list rather than being deleted from it because the two are different
+// permissions: pass-through would forward whatever arrived under that name from anywhere,
+// while the re-add forwards the one value the outer chain resolved for this request.
+// RequestIDMiddleware stamps that value onto the request, so what is forwarded is the id
+// the outer server logs — including when the caller supplied it, which that middleware
+// honours by design. The rest of this list protects genuinely different things and is
+// untouched: cookie carries the session secret, and the forwarding trio plus x-real-ip
+// carry client network identity the instance has no business learning.
 var strippedProxyRequestHeaders = map[string]struct{}{
 	"cookie":            {},
 	"forwarded":         {},
@@ -89,6 +86,7 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 		return
 	}
 	copyRequestHeaders(outReq.Header, proxyReq.Header)
+	httpx.ForwardRequestID(outReq.Header, proxyReq.Header)
 
 	resp, err := client.Do(outReq)
 	if err != nil {
@@ -97,7 +95,8 @@ func Forward(w http.ResponseWriter, r *http.Request, targetURL *url.URL, opts Op
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	copyHeaders(w.Header(), resp.Header)
+	httpx.CopyProxiedResponseHeaders(w.Header(), resp.Header)
+	recordProxiedFailureReason(w, resp)
 
 	// Enrich activity from response headers (always available, regardless of body size).
 	enrichActivityFromHeaders(r, resp.Header)
@@ -159,6 +158,20 @@ func HTTP(w http.ResponseWriter, r *http.Request, targetURL string) {
 // enrichActivityFromHeaders extracts tab ID from upstream response headers
 // and enriches the activity event. This works for all response sizes,
 // unlike body-based enrichment which is limited to small JSON responses.
+// recordProxiedFailureReason carries the reason across the hop: the instance's error
+// producer stamped these headers on the response it serialised, so reading them here
+// keeps the reason coming from the producer — never from re-parsing the body.
+func recordProxiedFailureReason(w http.ResponseWriter, resp *http.Response) {
+	if resp.StatusCode < 400 {
+		return
+	}
+	code := strings.TrimSpace(resp.Header.Get(httpx.FailureCodeHeader))
+	if code == "" {
+		return
+	}
+	httpx.RecordFailureReason(w, code, resp.Header.Get(httpx.FailureMessageHeader))
+}
+
 func enrichActivityFromHeaders(origReq *http.Request, respHeaders http.Header) {
 	tabID := strings.TrimSpace(respHeaders.Get(activity.HeaderPTTabID))
 	if tabID != "" {
@@ -175,24 +188,12 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-func copyHeaders(dst, src http.Header) {
-	for k, vv := range src {
-		if _, skip := hopByHopHeaders[strings.ToLower(k)]; skip {
-			continue
-		}
-		for _, v := range vv {
-			dst.Add(k, v)
-		}
-	}
-}
-
 func copyRequestHeaders(dst, src http.Header) {
 	for k, vv := range src {
-		lower := strings.ToLower(k)
-		if _, skip := hopByHopHeaders[lower]; skip {
+		if httpx.IsHopByHopHeader(k) {
 			continue
 		}
-		if _, skip := strippedProxyRequestHeaders[lower]; skip {
+		if _, skip := strippedProxyRequestHeaders[strings.ToLower(k)]; skip {
 			continue
 		}
 		for _, v := range vv {

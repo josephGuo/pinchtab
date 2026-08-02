@@ -46,10 +46,9 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 			MCP:          cfg.Observability.Activity.Events.MCP,
 			Other:        cfg.Observability.Activity.Events.Other,
 		},
-	}, cfg.ActivityStateDir())
+	}, cfg.ActivityLogDir())
 	if err != nil {
-		slog.Error("activity store", "err", err)
-		os.Exit(1)
+		fatalStartup("activity store", err)
 	}
 
 	mux := http.NewServeMux()
@@ -81,6 +80,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 	}
 	h.RegisterRoutes(mux, doShutdown)
 	activity.RegisterHandlers(mux, actStore)
+	RegisterSessionsUnavailableInBridgeMode(mux)
 	cli.LogSecurityWarnings(cfg)
 
 	server = &http.Server{
@@ -97,23 +97,21 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 			),
 		),
 		MaxHeaderBytes:    maxHeaderBytes,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      60 * time.Second,
-		IdleTimeout:       120 * time.Second,
+		ReadHeaderTimeout: serverReadHeaderTimeout,
+		ReadTimeout:       serverReadTimeout,
+		WriteTimeout:      serverWriteTimeout,
+		IdleTimeout:       serverIdleTimeout,
 	}
 
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		slog.Error("server error", "err", err)
-		os.Exit(1)
+		fatalStartup("cannot listen on "+listenAddr, err)
 	}
 	applyBoundBridgePort(cfg, listener.Addr())
 	registration, err := registerBridge(cfg, listener.Addr())
 	if err != nil {
 		_ = listener.Close()
-		slog.Error("bridge registry", "err", err)
-		os.Exit(1)
+		fatalStartup("bridge registry", err)
 	}
 	defer func() {
 		if err := registration.Close(); err != nil {
@@ -135,8 +133,7 @@ func RunBridgeServer(cfg *config.RuntimeConfig, version string) {
 		doShutdown()
 		if err != nil && err != http.ErrServerClosed {
 			_ = registration.Close()
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+			fatalStartup("server error", err)
 		}
 		return
 	}

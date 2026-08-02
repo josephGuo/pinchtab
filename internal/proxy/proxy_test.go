@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/pinchtab/pinchtab/internal/httpx"
 )
 
 func fakeBridge(t *testing.T) *httptest.Server {
@@ -125,10 +127,21 @@ func TestHTTP_StripsSensitiveRequestHeaders(t *testing.T) {
 	if resp["authorization"] != "Bearer user-token" {
 		t.Fatalf("authorization = %v, want preserved bearer token", resp["authorization"])
 	}
-	for _, field := range []string{"cookie", "xForwardedFor", "xForwardedHost", "xForwardedProto", "forwarded", "xRealIP", "xRequestID"} {
+	for _, field := range []string{"cookie", "xForwardedFor", "xForwardedHost", "xForwardedProto", "forwarded", "xRealIP"} {
 		if got := resp[field]; got != "" {
 			t.Fatalf("%s should have been stripped, got %v", field, got)
 		}
+	}
+
+	// X-Request-Id is the deliberate exception to this strip list, and it is asserted in
+	// the same test as the members that stay stripped so the two cannot drift apart.
+	// Forwarding it is what makes one proxied request findable in the instance log as well
+	// as the outer one; without it the instance mints an id of its own that appears in no
+	// log a caller could be pointed at. The value is client-influenced here on purpose —
+	// RequestIDMiddleware honours an inbound id by design and the outer server already
+	// logs it, so the instance learns nothing the outer log does not already contain.
+	if got := resp["xRequestID"]; got != "req-123" {
+		t.Fatalf("xRequestID = %v, want the outer id req-123 forwarded so both logs carry it", got)
 	}
 }
 
@@ -136,8 +149,8 @@ func TestHTTP_UsesSharedClient(t *testing.T) {
 	if DefaultClient == nil {
 		t.Fatal("DefaultClient should not be nil")
 	}
-	if DefaultClient.Timeout != 60*1e9 { // 60 seconds in nanoseconds
-		t.Errorf("expected 60s timeout, got %s", DefaultClient.Timeout)
+	if DefaultClient.Timeout != httpx.MaxNavigationHTTPDuration {
+		t.Errorf("timeout = %s, want %s", DefaultClient.Timeout, httpx.MaxNavigationHTTPDuration)
 	}
 }
 
@@ -160,5 +173,38 @@ func TestIsWebSocketUpgrade(t *testing.T) {
 				t.Errorf("isWebSocketUpgrade() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHTTP_DoesNotDoubleTheOuterChainsResponseHeaders(t *testing.T) {
+	owned := httpx.OuterChainResponseHeaders()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, name := range owned {
+			w.Header().Set(name, "instance-"+name)
+		}
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	req := httptest.NewRequest("GET", "/tabs", nil)
+	rec := httptest.NewRecorder()
+	for _, name := range owned {
+		rec.Header().Set(name, "outer-"+name)
+	}
+
+	HTTP(rec, req, srv.URL+"/tabs")
+
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	for _, name := range owned {
+		got := rec.Header().Values(name)
+		if len(got) != 1 {
+			t.Errorf("%s = %v, want exactly one value — the second is minted by the instance and appears in no log the outer process writes", name, got)
+			continue
+		}
+		if got[0] != "outer-"+name {
+			t.Errorf("%s = %q, want the outer chain's value, which is the one it logged", name, got[0])
+		}
 	}
 }
