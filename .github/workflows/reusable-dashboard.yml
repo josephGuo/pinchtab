@@ -2,11 +2,6 @@ name: Reusable / Dashboard
 
 on:
   workflow_call:
-    inputs:
-      ref:
-        required: true
-        type: string
-
 
 permissions:
   contents: read
@@ -21,18 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version-file: go.mod
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install tygo
         run: go install github.com/gzuidhof/tygo@latest
@@ -64,18 +57,16 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
 
       - name: Setup Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.26'
+          go-version-file: go.mod
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
 
       - name: Install tygo
         run: go install github.com/gzuidhof/tygo@latest
