@@ -6,12 +6,33 @@ on:
       ref:
         required: true
         type: string
+      windows_tests:
+        required: false
+        type: boolean
+        default: false
 
 
 permissions:
   contents: read
 
 jobs:
+  windows-test:
+    name: Test (windows)
+    if: inputs.windows_tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test
+        run: go test -count=1 ./...
+
   build:
     name: Build & Vet
     runs-on: ubuntu-latest

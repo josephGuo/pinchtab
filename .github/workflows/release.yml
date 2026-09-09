@@ -39,6 +39,7 @@ jobs:
     uses: ./.github/workflows/reusable-go.yml
     with:
       ref: ${{ needs.validate.outputs.sha }}
+      windows_tests: true
 
   dashboard-checks:
     needs: validate

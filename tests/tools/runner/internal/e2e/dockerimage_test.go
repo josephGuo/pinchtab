@@ -287,6 +287,9 @@ func TestDockerSmokeRunNamesEachImageAndWhy(t *testing.T) {
 // the image changes, the tag does not, and a stale one is reused.
 func TestBuildInputDigestCoversModeAndSymlinkTargets(t *testing.T) {
 	t.Run("chmod +x on a context file changes the digest", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows does not expose Unix executable mode bits")
+		}
 		root := writeProbeContext(t)
 		before := digestOf(t, root, probeSpec)
 
