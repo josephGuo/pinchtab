@@ -1,6 +1,17 @@
-﻿# Lite 引擎
+﻿# Lite Engine
 
-PinchTab 包含一个**Lite 引擎**，可以执行 DOM 捕获 — 导航、快照、文本提取、点击和输入 — 而不需要 Chrome 或 Chromium。它由 [Gost-DOM](https://github.com/gost-dom/browser)（v0.11.0，MIT 许可证）提供支持，这是一个用纯 Go 编写的无头浏览器。
+> **已弃用：** 本文描述的是遗留引擎模型（`chrome`/`lite`/`auto`）。
+> 该引擎已被 **browser provider** 模型取代。在配置中使用 `browsers.default`，
+> 可选 provider：`chrome`、`cloak` 或 `ghost-chrome`。
+> 细节见[术语](../architecture/terminology.md)。
+> 下面的代码在 HEAD 上都已不存在：`internal/engine`（Router、rules、`LiteEngine`）、
+> `server.engine` 键（现在是配置校验错误）以及 `X-Engine` 头均已移除。
+> Gost-DOM 静态路径现在位于 `internal/browsers/ghostchrome/staticfetch`，
+> 在升级到 Chrome 之前由 `ghost-chrome` provider 使用。
+
+PinchTab 包含一个 **Lite Engine**，可以执行 DOM 捕获——导航、快照、
+文本提取、点击和输入——而不需要 Chrome 或 Chromium。它由 [Gost-DOM](https://github.com/gost-dom/browser)（v0.11.0，MIT 许可证）提供支持，
+这是一个用纯 Go 编写的无头浏览器。
 
 **问题：** [#201](https://github.com/pinchtab/pinchtab/issues/201)
 
@@ -46,7 +57,7 @@ Chrome 引擎包装了现有的 CDP/chromedp 管道。`internal/engine/lite.go` 
 ### 路由器（策略模式）
 
 ```
-请求 → 路由器 → [规则 1] → [规则 2] → … → [回退规则] → 引擎
+Request → Router → [Rule 1] → [Rule 2] → … → [Fallback Rule] → Engine
 ```
 
 `internal/engine/router.go` 中的 `Router` 评估 `RouteRule` 实现的有序链。第一个返回非 `Undecided` 裁决的规则获胜。规则在启动时注册，可通过 `AddRule()` / `RemoveRule()` 热交换。
@@ -85,15 +96,15 @@ handlers/navigation.go — HandleNavigate()
     │       ▼
     │   LiteEngine.Navigate(ctx, url)
     │       ├─ HTTP GET url
-    │       ├─ 剥离 <script> 标签（x/net/html 分词器）
+    │       ├─ Strip <script> tags (x/net/html tokenizer)
     │       ├─ browser.NewWindowReader(reader)  [Gost-DOM]
-    │       └─ 返回 NavigateResult{TabID, URL, Title}
+    │       └─ return NavigateResult{TabID, URL, Title}
     │
     └─ w.Header().Set("X-Engine", "lite")
        JSON {"tabId": "lp-1", "url": "…", "title": "…"}
 ```
 
-快照然后遍历 Gost-DOM 文档树，并将 HTML 语义映射到可访问性角色（标题、链接、按钮、文本框等）。文本遍历相同的树并折叠空白运行。
+快照然后遍历 Gost-DOM 文档树，并将 HTML 语义映射到可访问性角色（标题、链接、按钮、文本框等）。文本遍历相同的树，并合并连续的空白字符。
 
 ---
 
@@ -113,7 +124,7 @@ handlers/navigation.go — HandleNavigate()
 | JavaScript 渲染的 SPA | ❌ | ✅ |
 | 机器人检测绕过 | ❌ | ✅ |
 
-`CapabilityRule` 确保即使在 `lite` 模式下，屏幕截图/ PDF/ 评估/ Cookie 也始终路由到 Chrome。
+`CapabilityRule` 确保即使在 `lite` 模式下，屏幕截图/PDF/评估/Cookie 也始终路由到 Chrome。
 
 ---
 
@@ -192,7 +203,9 @@ Chrome 在文本提取方面更快，因为它在浏览器中运行 Mozilla Read
 | `internal/handlers/navigation.go` | `useLite()` 快速路径、`X-Engine` 头 |
 | `internal/handlers/snapshot.go` | Lite 路径的 `SnapshotNode → A11yNode` 转换 |
 | `internal/handlers/text.go` | Lite 文本快速路径 |
-| `cmd/pinchtab/cmd_bridge.go` | 启动时从 `config.Engine` 进行路由器接线 |
+| `cmd/pinchtab/cmd_bridge.go` | 从 CLI flag / 配置解析引擎模式字符串（`resolveBridgeEngine`） |
+| `internal/server/bridge.go` | 启动时把 `engine.Router`（`engine.NewRouter(mode, lite)`）接入 handler |
+| `internal/config/config_types.go` | `RuntimeConfig.Engine` / `ServerConfig.Engine` 字段 |
 
 ---
 

@@ -1,12 +1,12 @@
 ﻿# 多实例
 
-PinchTab 可以同时运行多个隔离的 Chrome 实例。每个运行中的实例都有自己的浏览器进程、端口、标签页和基于配置文件的状态。
+PinchTab 可以同时运行多个隔离的 Chrome 实例。每个运行中的实例都有自己的浏览器进程、端口、标签页和基于 Profile 的状态。
 
 ## 心智模型
 
-- 配置文件是存储在磁盘上的浏览器状态
+- Profile 是存储在磁盘上的浏览器状态
 - 实例是运行中的 Chrome 进程
-- 一个配置文件一次最多可以有一个活动的管理实例
+- 一个 Profile 一次最多可以有一个活动的受管实例
 - 标签页属于实例，标签页 ID 应被视为 API 返回的不透明值
 
 ## 启动编排器
@@ -15,19 +15,19 @@ PinchTab 可以同时运行多个隔离的 Chrome 实例。每个运行中的实
 pinchtab server
 ```
 
-默认情况下，编排器监听 `http://localhost:9867`。
+默认情况下，编排器监听 `http://localhost:9867`。下面的每个 API 调用都需要服务器令牌；示例假定已执行 `export PINCHTAB_TOKEN=$(pinchtab config token --stdout)`，并以 `-H "Authorization: Bearer $PINCHTAB_TOKEN"` 发送（为简洁起见在下文省略）。CLI 替代方案会自动取到令牌。
 
 ## 启动实例
 
-当您需要可预测的多实例行为时，使用显式实例 API：
+当你需要可预测的多实例行为时，使用显式实例 API：
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed","port":"9999"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --mode headed --port 9999
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
@@ -42,9 +42,9 @@ pinchtab instance start --mode headed --port 9999
 注意：
 
 - `POST /instances/launch` 仍然作为兼容性端点存在，但现在遵循与 `POST /instances/start` 相同的语义。
-- 如果您省略 `profileId`，PinchTab 会创建一个带有自动生成的配置文件名称的管理实例。
-- `securityPolicy.allowedDomains` 允许您仅为该实例扩大 IDPI/域信任。这是在服务器基线之上的添加，因此一个实例可以使用 `["*"]`，而其他实例保持默认的允许列表。
-- 启动实例在使用带有自动启动行为的简写路由的工作流中是可选的，例如 `simple` 策略。在 `explicit` 中，您应该假设需要自己启动一个实例。
+- 如果你省略 `profileId`，PinchTab 会创建一个带有自动生成的 Profile 名称的受管实例。
+- `securityPolicy.allowedDomains` 让你可以仅为该实例放宽 IDPI/域名信任。它与服务器的 `security.allowedDomains` 合并，因此在一个仅本地的服务器允许列表下，某个实例可以用 `["*"]`，而其余实例仍保持受限。服务器默认不设置 `allowedDomains`，所以在默认服务器上给某个实例传一个列表会把该实例限制在该列表内。
+- 启动实例只在使用带自动启动行为的简写路由的工作流中才是可选的，例如默认的 `always-on` 策略或 `simple`。在 `explicit` 中，你应当假设需要自己启动一个实例。
 
 ## 在特定实例中打开标签页
 
@@ -52,7 +52,7 @@ pinchtab instance start --mode headed --port 9999
 curl -X POST http://localhost:9867/instances/inst_0a89a5bb/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# 响应
+# Response
 {
   "tabId": "8f9c7d4e1234567890abcdef12345678",
   "url": "https://pinchtab.com",
@@ -68,25 +68,27 @@ curl "http://localhost:9867/tabs/<tabId>/text"
 curl "http://localhost:9867/tabs/<tabId>/metrics"
 ```
 
-## 重用持久配置文件
+`/tabs/<tabId>/metrics` 返回的是所属实例的聚合内存，而不是该标签页自己的——标签页 id 只用来选定要询问哪个实例。见[内存监控](memory-monitoring.md)。
 
-首先列出现有配置文件：
+## 重用持久 Profile
+
+首先列出现有 Profile：
 
 ```bash
 curl http://localhost:9867/profiles
 ```
 
-然后为已知配置文件启动实例：
+然后为已知 Profile 启动实例：
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
-  -d '{"profileId":"278be873adeb","mode":"headless"}'
-# 命令行界面 替代方案
-pinchtab instance start --profile 278be873adeb --mode headless
+  -d '{"profileId":"prof_278be873","mode":"headless"}'
+# CLI Alternative
+pinchtab instance start --profile prof_278be873 --mode headless
 ```
 
-由于一个配置文件只能有一个活动的管理实例，因此在它已经活动时再次启动同一个配置文件会返回错误，而不是创建重复的浏览器。
+由于一个 Profile 只能有一个活动的受管实例，因此在它已经活动时再次启动同一个 Profile 会返回错误，而不是创建重复的浏览器。
 
 ## 监控运行实例
 
@@ -100,7 +102,7 @@ curl http://localhost:9867/instances/metrics
 有用的字段：
 
 - `id`：稳定的实例标识符
-- `profileId` 和 `profileName`：支持该实例的配置文件
+- `profileId` 和 `profileName`：支持该实例的 Profile
 - `port`：实例的 HTTP 端口
 - `mode`：用于请求/响应对称性的显式 `"headless"` 或 `"headed"` 字符串
 - `headless`：Chrome 是否以无头模式启动
@@ -110,20 +112,20 @@ curl http://localhost:9867/instances/metrics
 
 ```bash
 curl -X POST http://localhost:9867/instances/inst_0a89a5bb/stop
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance stop inst_0a89a5bb
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "status": "stopped"
 }
 ```
 
-停止实例会释放其端口。如果配置文件是持久的，其浏览器状态会保留在磁盘上。
+停止实例会释放其端口。如果 Profile 是持久的，其浏览器状态会保留在磁盘上。
 
 ## 端口分配
 
-如果您不传递端口，PinchTab 会从配置的范围中分配一个：
+如果你不传递端口，PinchTab 会从配置的范围中分配一个：
 
 ```json
 {
@@ -141,6 +143,6 @@ pinchtab instance stop inst_0a89a5bb
 当以下情况时，优先使用显式实例 API：
 
 - 多个浏览器会话必须保持隔离
-- 您希望同时使用单独的有头和无头浏览器
-- 您需要稳定的配置文件到实例的所有权规则
-- 您正在构建永远不应该依赖于隐式自动启动的工具
+- 你希望同时使用单独的有头和无头浏览器
+- 你需要稳定的 Profile 到实例的所有权规则
+- 你正在构建永远不应该依赖于隐式自动启动的工具

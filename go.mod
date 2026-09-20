@@ -3,39 +3,53 @@ module github.com/pinchtab/pinchtab
 go 1.26.0
 
 require (
-	github.com/chromedp/cdproto v0.0.0-20260427013145-5737772c319b
-	github.com/chromedp/chromedp v0.15.1
+	github.com/chromedp/cdproto v0.0.0-20260912003405-686a5c723acc
+	github.com/chromedp/chromedp v0.16.0
 	github.com/gobwas/ws v1.4.0
-	github.com/gost-dom/browser v0.11.0
-	github.com/mark3labs/mcp-go v0.50.0
-	github.com/pinchtab/idpishield v0.2.0
+	github.com/gost-dom/browser v0.12.0
+	github.com/mark3labs/mcp-go v1.1.0
+	github.com/pinchtab/idpishield v0.1.4
+	github.com/pinchtab/seaportal v0.2.0
 	github.com/pinchtab/semantic v0.1.3
-	github.com/shirou/gopsutil/v4 v4.26.3
+	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/net v0.53.0
+	github.com/spf13/pflag v1.0.10
+	golang.org/x/net v0.59.0
+	golang.org/x/term v0.46.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
+	github.com/JohannesKaufmann/dom v0.3.1 // indirect
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2 // indirect
+	github.com/andybalholm/brotli v1.2.4 // indirect
+	github.com/andybalholm/cascadia v1.3.5 // indirect
+	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/chromedp/sysutil v1.1.0 // indirect
-	github.com/ebitengine/purego v0.10.0 // indirect
-	github.com/go-json-experiment/json v0.0.0-20260214004413-d219187c3433 // indirect
+	github.com/ebitengine/purego v0.11.0 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260820222146-c27c302e5fc3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/go-shiori/dom v0.0.0-20230515143342-73569d674e1c // indirect
+	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f // indirect
+	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gost-dom/css v0.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
-	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+	github.com/klauspost/compress v1.20.0 // indirect
+	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0 // indirect
+	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
+	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
+	github.com/refraction-networking/utls v1.8.2 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/tklauser/go-sysconf v0.3.16 // indirect
-	github.com/tklauser/numcpus v0.11.0 // indirect
+	github.com/tklauser/go-sysconf v0.4.0 // indirect
+	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 )

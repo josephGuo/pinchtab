@@ -1,0 +1,152 @@
+{
+  "$schema": "https://raw.githubusercontent.com/pinchtab/pinchtab/main/schema/config.json",
+  "configVersion": "0.8.0",
+  "server": {
+    "port": "9867",
+    "bind": "127.0.0.1",
+    "token": "f176631f47d942ccf9ac795f15f74a22bdbdd6f999a446a2",
+    "stateDir": "",
+    "engine": ""
+  },
+  "browser": {
+    "version": "",
+    "binary": "",
+    "extraFlags": "",
+    "extensionPaths": []
+  },
+  "instanceDefaults": {
+    "mode": "headed",
+    "noRestore": null,
+    "timezone": "Asia/Shanghai",
+    "blockImages": false,
+    "blockMedia": null,
+    "blockAds": null,
+    "maxTabs": 30,
+    "maxParallelTabs": null,
+    "userAgent": "",
+    "noAnimations": null,
+    "humanize": true,
+    "stealthLevel": "full",
+    "tabEvictionPolicy": ""
+  },
+  "security": {
+    "allowEvaluate": true,
+    "allowMacro": true,
+    "allowScreencast": true,
+    "allowDownload": true,
+    "allowCookies": true,
+    "allowNetworkIntercept": null,
+    "allowedDomains": null,
+    "downloadAllowedDomains": [],
+    "downloadMaxBytes": null,
+    "allowUpload": true,
+    "allowClipboard": null,
+    "allowStateExport": null,
+    "stateEncryptionKey": null,
+    "enableActionGuards": null,
+    "uploadMaxRequestBytes": null,
+    "uploadMaxFiles": null,
+    "uploadMaxFileBytes": null,
+    "uploadMaxTotalBytes": null,
+    "maxRedirects": null,
+    "trustedProxyCIDRs": [],
+    "trustedResolveCIDRs": [],
+    "trustLoopbackProxy": null,
+    "attach": {
+      "enabled": false,
+      "allowHosts": [],
+      "allowSchemes": []
+    },
+    "idpi": {
+      "enabled": false,
+      "strictMode": false,
+      "scanContent": false,
+      "wrapContent": false,
+      "customPatterns": [],
+      "scanTimeoutSec": 0,
+      "shieldThreshold": 0
+    }
+  },
+  "profiles": {
+    "baseDir": "~/.pinchtab/profiles",
+    "defaultProfile": "damai-test"
+  },
+  "multiInstance": {
+    "strategy": "always-on",
+    "allocationPolicy": "",
+    "instancePortStart": null,
+    "instancePortEnd": null,
+    "restart": {
+      "maxRestarts": null,
+      "initBackoffSec": null,
+      "maxBackoffSec": null,
+      "stableAfterSec": null
+    }
+  },
+  "timeouts": {
+    "actionSec": 25,
+    "navigateSec": 60,
+    "shutdownSec": 10,
+    "waitNavMs": 1000
+  },
+  "scheduler": {
+    "enabled": null,
+    "strategy": "",
+    "maxQueueSize": null,
+    "maxPerAgent": null,
+    "maxInflight": null,
+    "maxPerAgentInflight": null,
+    "resultTTLSec": null,
+    "workerCount": null
+  },
+  "observability": {
+    "activity": {
+      "enabled": null,
+      "sessionIdleSec": null,
+      "retentionDays": null,
+      "stateDir": "",
+      "events": {
+        "dashboard": false,
+        "server": false,
+        "bridge": false,
+        "orchestrator": false,
+        "scheduler": false,
+        "mcp": false,
+        "other": false
+      }
+    }
+  },
+  "sessions": {
+    "dashboard": {
+      "persist": true,
+      "idleTimeoutSec": 604800,
+      "maxLifetimeSec": 604800,
+      "elevationWindowSec": 900,
+      "persistElevationAcrossRestart": false,
+      "requireElevation": false
+    }
+  },
+  "autoSolver": {
+    "enabled": true,
+    "autoTrigger": true,
+    "triggerOnNavigate": true,
+    "triggerOnAction": true,
+    "maxAttempts": 8,
+    "solverTimeoutSec": 30,
+    "retryBaseDelayMs": 500,
+    "retryMaxDelayMs": 10000,
+    "solvers": [
+      "cloudflare",
+      "semantic",
+      "capsolver",
+      "twocaptcha"
+    ],
+    "llmFallback": false,
+    "external": {},
+    "credentials": {
+      "login": {},
+      "signup": {},
+      "form": {}
+    }
+  }
+}

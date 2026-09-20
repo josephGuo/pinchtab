@@ -6,9 +6,9 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"focus","ref":"e8"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab focus e8
-# 响应（使用 --json 获取完整 JSON）
+# Response (use --json for full JSON)
 OK
 ```
 

@@ -5,7 +5,7 @@
 - `managed + bridge`（托管 + 桥接）
 - `managed + direct-cdp`（托管 + 直接 CDP）
 
-两者都是**托管**的，因为 Pinchtab 拥有实例的生命周期。区别在于浏览器控制逻辑的位置以及服务器如何到达 Chrome。
+两者都是**托管**的，因为 PinchTab 拥有实例的生命周期。区别在于浏览器控制逻辑的位置以及服务器如何到达 Chrome。
 
 ## 简版
 
@@ -19,17 +19,17 @@ managed + direct-cdp
 
 桥接模型增加了一个额外的进程和一个额外的跳数。直接 CDP 模型移除了这个跳数，并将控制权保留在主服务器中。
 
-## 图表 1：运行时形状
+## 图表 1：运行时形态
 
 ```text
 Managed + bridge
-  Pinchtab server
-    └─ Pinchtab bridge child
+  PinchTab server
+    └─ PinchTab bridge child
          └─ Chrome
               └─ Tabs
 
 Managed + direct-cdp
-  Pinchtab server
+  PinchTab server
     └─ Chrome
          └─ Tabs
 ```
@@ -38,7 +38,7 @@ Managed + direct-cdp
 
 ### 是什么
 
-Pinchtab 为每个托管实例启动一个子 `pinchtab bridge` 进程。该桥接拥有一个浏览器并暴露单实例 HTTP API。主服务器将实例和标签页请求路由到该子进程。
+PinchTab 为每个托管实例启动一个子 `pinchtab bridge` 进程。该桥接拥有一个浏览器并暴露单实例 HTTP API。主服务器将实例和标签页请求路由到该子进程。
 
 ### 通信路径
 
@@ -52,7 +52,7 @@ agent -> server -> bridge -> Chrome
 - 更清晰的进程边界
 - 更容易的崩溃控制
 - 更容易的实例级日志和健康检查
-- 作为工作模型在操作上更容易推理
+- 作为工作进程模型，在运维上更容易理解
 
 ### 成本
 
@@ -73,7 +73,7 @@ agent -> server -> bridge -> Chrome
 
 ### 是什么
 
-Pinchtab 自己启动 Chrome，并将 CDP 会话保存在主服务器进程内。没有桥接子进程，也没有额外的实例级 HTTP 服务器。
+PinchTab 自己启动 Chrome，并将 CDP 会话保存在主服务器进程内。没有桥接子进程，也没有额外的实例级 HTTP 服务器。
 
 ### 通信路径
 
@@ -141,15 +141,15 @@ managed + direct-cdp
 或者更简短地说：
 
 ```text
-bridge      = 更好的隔离
-direct-cdp  = 更好的效率
+bridge      = better isolation
+direct-cdp  = better efficiency
 ```
 
 ## 当前状态
 
-今天，预期的架构是：
+目前，预期的架构是：
 
-- 对于 Pinchtab 启动的实例，使用 `managed + bridge`
-- 对于外部管理的浏览器，使用 `attached + direct-cdp`
+- PinchTab 启动的实例使用 `managed + bridge`
+- 外部受管的浏览器使用 `attached + bridge`：`POST /instances/attach` 会派生一个 `pinchtab bridge --cdp-attach <cdpUrl>` 子进程（`attachType: cdp-bridge`），`POST /instances/attach-bridge` 则注册一个已在运行的 bridge（`attachType: bridge`）——见[编排](../architecture/orchestration.md#attach-flow)
 
-`managed + direct-cdp` 是一个有用的未来模型，但它主要是一个架构选项，而不是默认实现。
+`managed + direct-cdp` 尚未实现；它只是一个架构选项。每个实例，无论是 managed 还是 attached，都通过 bridge 访问。

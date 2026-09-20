@@ -3,25 +3,80 @@ package config
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/pinchtab/pinchtab/internal/autosolver/catalog"
+	"github.com/pinchtab/pinchtab/internal/browsers"
+	"github.com/pinchtab/pinchtab/internal/config/geo"
+	"github.com/pinchtab/pinchtab/internal/safelog"
+	"github.com/pinchtab/pinchtab/internal/session"
 )
 
-// ValidationError represents a configuration validation error.
+// validateAgentSessionMode gates sessions.agent.mode. "required" is refused
+// rather than accepted-and-ignored: it names a real posture — the session
+// credential as the only accepted agent credential — that this server does not
+// enforce, and an operator who sets it believes they have session-only auth while
+// the bearer token and the dashboard cookie still authenticate. Refusing is
+// operator-visible and small-radius (the default is preferred, so only an explicit
+// setter is hit) and it replaces a silent security misapprehension with a loud one.
+func validateAgentSessionMode(mode string) []error {
+	switch session.NormalizeMode(mode) {
+	case "", session.ModeOff, session.ModePreferred:
+		return nil
+	case session.ModeRequired:
+		return []error{ValidationError{
+			Field:       "sessions.agent.mode",
+			Message:     fmt.Sprintf("%q is not implemented: the server bearer token and the dashboard cookie still authenticate, so this value cannot deliver the session-only auth it names (must be off or preferred)", session.ModeRequired),
+			FatalAtLoad: true,
+		}}
+	default:
+		return []error{ValidationError{
+			Field:       "sessions.agent.mode",
+			Message:     fmt.Sprintf("invalid value %q (must be off or preferred)", mode),
+			FatalAtLoad: true,
+		}}
+	}
+}
+
 type ValidationError struct {
 	Field   string
 	Message string
+
+	// FatalAtLoad stops the process at load instead of warning past the problem.
+	// Membership is an explicit opt-in with a reason per field, so the class stays
+	// readable in the type rather than being re-decided from a message:
+	//
+	//   sessions.agent.mode — an auth posture. A value the server cannot interpret
+	//     would otherwise be read as the default and leave agent sessions serving,
+	//     which is the misapprehension refusing it exists to end. Choosing a posture
+	//     on the operator's behalf is what a load must not do.
+	//
+	// It is the only member. Every other validation error warns at load and gates
+	// only the write paths, which is what keeps an inert key from aborting a server.
+	FatalAtLoad bool
 }
 
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-// ValidateFileConfig validates a FileConfig and returns all errors found.
+// ValidateFileConfig returns the GATING problems in a FileConfig: values that are wrong,
+// out of range, or no longer supported. Every caller that decides whether a write may
+// proceed gates on this, so anything returned here blocks a save — off a TTY that means an
+// agent's write is refused, which is correct for an invalid port and wrong for a key that
+// merely does nothing.
+//
+// Advisories live in FileConfigAdvisories instead. Two severities rather than one is the
+// whole point: a diagnostic about an inert key used to ride this list and abort every
+// later config write, including writes to unrelated keys.
 func ValidateFileConfig(fc *FileConfig) []error {
 	var errs []error
 
-	// Server validation
 	if fc.Server.Port != "" {
 		if err := validatePort(fc.Server.Port, "server.port"); err != nil {
 			errs = append(errs, err)
@@ -32,6 +87,11 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			errs = append(errs, err)
 		}
 	}
+	if fc.Server.LogLevel != "" {
+		if _, err := safelog.ParseLevel(fc.Server.LogLevel); err != nil {
+			errs = append(errs, ValidationError{Field: "server.logLevel", Message: err.Error()})
+		}
+	}
 	if fc.Server.NetworkBufferSize != nil {
 		if *fc.Server.NetworkBufferSize < 1 || *fc.Server.NetworkBufferSize > MaxNetworkBufferSize {
 			errs = append(errs, ValidationError{
@@ -40,6 +100,26 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			})
 		}
 	}
+	if fc.Server.RetainNetworkBodyMaxBytes != nil {
+		if *fc.Server.RetainNetworkBodyMaxBytes < 0 || *fc.Server.RetainNetworkBodyMaxBytes > MaxRetainNetworkBodyMaxBytes {
+			errs = append(errs, ValidationError{
+				Field:   "server.retainNetworkBodyMaxBytes",
+				Message: fmt.Sprintf("must be between 0 and %d (got %d)", MaxRetainNetworkBodyMaxBytes, *fc.Server.RetainNetworkBodyMaxBytes),
+			})
+		}
+	}
+
+	if fc.Server.Engine != "" {
+		errs = append(errs, fmt.Errorf("server.engine is no longer supported; use browsers.default instead"))
+	}
+	if fc.Browser.Provider != "" {
+		errs = append(errs, fmt.Errorf("browser.provider is no longer supported; use browsers.default instead (e.g. \"browsers\": {\"default\": %q})", fc.Browser.Provider))
+	}
+	errs = append(errs, validateCloakBrowserConfig(fc.Browser.Cloak)...)
+	errs = append(errs, ValidateBrowserProxy("browser.proxy", fc.Browser.Proxy)...)
+	errs = append(errs, ValidateBrowserTargets(fc.Browser)...)
+	errs = append(errs, validateBrowsersBlock(*fc)...)
+
 	if fc.MultiInstance.InstancePortStart != nil && fc.MultiInstance.InstancePortEnd != nil {
 		if *fc.MultiInstance.InstancePortStart > *fc.MultiInstance.InstancePortEnd {
 			errs = append(errs, ValidationError{
@@ -82,7 +162,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Instance defaults validation
 	if fc.InstanceDefaults.Headless != nil && fc.InstanceDefaults.Mode != "" {
 		errs = append(errs, ValidationError{
 			Field:   "instanceDefaults.headless",
@@ -121,7 +200,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		if tp.Lifecycle != "" && !isValidLifecyclePolicy(tp.Lifecycle) {
 			errs = append(errs, ValidationError{
 				Field:   "instanceDefaults.tabPolicy.lifecycle",
-				Message: fmt.Sprintf("invalid value %q (must be keep or close_idle)", tp.Lifecycle),
+				Message: fmt.Sprintf("invalid value %q (must be keep, close_idle, or freeze_idle)", tp.Lifecycle),
 			})
 		}
 		if tp.CloseDelaySec != nil && *tp.CloseDelaySec < 0 {
@@ -144,7 +223,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Multi-instance validation
 	if fc.MultiInstance.Strategy != "" {
 		if !isValidStrategy(fc.MultiInstance.Strategy) {
 			errs = append(errs, ValidationError{
@@ -162,7 +240,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
-	// Attach validation
 	for _, scheme := range fc.Security.Attach.AllowSchemes {
 		if !isValidAttachScheme(scheme) {
 			errs = append(errs, ValidationError{
@@ -172,16 +249,16 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		}
 	}
 
-	if fc.Browser.ChromeExtraFlags != "" {
-		errs = append(errs, validateChromeExtraFlags(fc.Browser.ChromeExtraFlags)...)
+	if fc.Browser.BrowserExtraFlags != "" {
+		errs = append(errs, validateBrowserExtraFlags(fc.Browser.BrowserExtraFlags)...)
 	}
 
-	// IDPI validation
-	errs = append(errs, validateIDPIConfig(fc.Security.IDPI, effectiveSecurityAllowedDomains(fc.Security))...)
+	errs = append(errs, validateIDPIConfig(fc.Security.EffectiveIDPI(), effectiveSecurityAllowedDomains(fc.Security))...)
 	errs = append(errs, validateAllowedDomainList("security.downloadAllowedDomains", fc.Security.DownloadAllowedDomains)...)
 	errs = append(errs, validateTrustedCIDRList("security.trustedProxyCIDRs", fc.Security.TrustedProxyCIDRs)...)
 	errs = append(errs, validateTrustedCIDRList("security.trustedResolveCIDRs", fc.Security.TrustedResolveCIDRs)...)
 	errs = append(errs, validatePositiveIntLimit("security.downloadMaxBytes", fc.Security.DownloadMaxBytes, MaxDownloadMaxBytes)...)
+	errs = append(errs, validatePositiveIntLimit("security.memorySnapshotMaxBytes", fc.Security.MemorySnapshotMaxBytes, MaxMemorySnapshotMaxBytes)...)
 	errs = append(errs, validatePositiveIntLimit("security.uploadMaxRequestBytes", fc.Security.UploadMaxRequestBytes, MaxUploadMaxRequestBytes)...)
 	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFiles", fc.Security.UploadMaxFiles, MaxUploadMaxFiles)...)
 	errs = append(errs, validatePositiveIntLimit("security.uploadMaxFileBytes", fc.Security.UploadMaxFileBytes, MaxUploadMaxFileBytes)...)
@@ -194,7 +271,6 @@ func ValidateFileConfig(fc *FileConfig) []error {
 		})
 	}
 
-	// Timeouts validation
 	if fc.Timeouts.ActionSec < 0 {
 		errs = append(errs, ValidationError{
 			Field:   "timeouts.actionSec",
@@ -260,6 +336,19 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			break
 		}
 	}
+	// An unmatched name does not fail at run time, it changes which solvers run:
+	// one typo alongside good names silently drops that solver, and a list of
+	// only typos silently runs every solver instead.
+	for i, solverName := range fc.AutoSolver.Solvers {
+		name := strings.TrimSpace(solverName)
+		if name == "" || catalog.IsKnown(name) {
+			continue
+		}
+		errs = append(errs, ValidationError{
+			Field:   fmt.Sprintf("autoSolver.solvers[%d]", i),
+			Message: fmt.Sprintf("unknown solver %q (known: %v)", name, catalog.Names()),
+		})
+	}
 
 	if fc.Observability.Activity.SessionIdleSec != nil && *fc.Observability.Activity.SessionIdleSec < 0 {
 		errs = append(errs, ValidationError{
@@ -273,6 +362,7 @@ func ValidateFileConfig(fc *FileConfig) []error {
 			Message: fmt.Sprintf("must be > 0 (got %d)", *fc.Observability.Activity.RetentionDays),
 		})
 	}
+	errs = append(errs, validateAgentSessionMode(fc.Sessions.Agent.Mode)...)
 	if fc.Sessions.Dashboard.IdleTimeoutSec != nil && *fc.Sessions.Dashboard.IdleTimeoutSec <= 0 {
 		errs = append(errs, ValidationError{
 			Field:   "sessions.dashboard.idleTimeoutSec",
@@ -320,7 +410,6 @@ func validatePort(port string, field string) error {
 }
 
 func validateBind(bind string, field string) error {
-	// Accept common bind addresses
 	validBinds := map[string]bool{
 		"127.0.0.1": true,
 		"0.0.0.0":   true,
@@ -331,81 +420,129 @@ func validateBind(bind string, field string) error {
 	if validBinds[bind] {
 		return nil
 	}
-	// Basic IP format check (not exhaustive, just sanity)
-	// If it contains a dot, assume it's an IPv4 attempt
-	// If it contains a colon, assume it's an IPv6 attempt
-	// This is intentionally loose — the OS will reject truly invalid addresses
+	// Intentionally loose — the OS will reject truly invalid addresses.
 	return nil
 }
 
-func isValidStealthLevel(level string) bool {
-	switch level {
-	case "light", "medium", "full":
-		return true
-	default:
-		return false
+var cloakFingerprintSeedRegex = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
+
+func validateCloakBrowserConfig(cloak CloakBrowserConfig) []error {
+	return validateCloakBrowserConfigAt("browser.cloak", cloak)
+}
+
+func validateCloakBrowserConfigAt(fieldPrefix string, cloak CloakBrowserConfig) []error {
+	var errs []error
+	if cloak.Platform != "" && !isValidCloakPlatform(cloak.Platform) {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".platform",
+			Message: fmt.Sprintf("invalid value %q (must be windows, macos, or linux)", cloak.Platform),
+		})
 	}
+	if cloak.StorageQuotaMB != nil && *cloak.StorageQuotaMB < 0 {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".storageQuotaMB",
+			Message: fmt.Sprintf("must be >= 0 (got %d)", *cloak.StorageQuotaMB),
+		})
+	}
+	if seed := strings.TrimSpace(cloak.FingerprintSeed); seed != "" && !cloakFingerprintSeedRegex.MatchString(seed) {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".fingerprintSeed",
+			Message: "must be 1-128 characters of letters, numbers, dot, underscore, colon, or hyphen",
+		})
+	}
+	if err := geo.Validate(geo.Info{Timezone: cloak.Timezone, Locale: cloak.Locale}); err != nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix,
+			Message: err.Error(),
+		})
+	}
+	if ip := strings.TrimSpace(cloak.WebRTCIP); ip != "" && !strings.EqualFold(ip, "auto") && net.ParseIP(ip) == nil {
+		errs = append(errs, ValidationError{
+			Field:   fieldPrefix + ".webrtcIP",
+			Message: fmt.Sprintf("webrtcIP %q must be \"auto\" or a valid IP address", cloak.WebRTCIP),
+		})
+	}
+	if dir := strings.TrimSpace(cloak.FontsDir); dir != "" {
+		clean := filepath.Clean(dir)
+		if clean != dir {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be a clean path (got %q, clean form is %q)", dir, clean),
+			})
+		} else if st, err := os.Stat(dir); err != nil {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: fmt.Sprintf("must be an existing directory: %v", err),
+			})
+		} else if !st.IsDir() {
+			errs = append(errs, ValidationError{
+				Field:   fieldPrefix + ".fontsDir",
+				Message: "must be an existing directory",
+			})
+		}
+	}
+	return errs
+}
+
+// Enumerated config option sets are defined exactly once here; both the
+// isValid* membership checks and the exported Valid*() lists derive from these
+// slices so the two can't drift apart.
+var (
+	cloakPlatforms     = []string{"windows", "macos", "linux"}
+	stealthLevels      = []string{"light", "medium", "full"}
+	evictionPolicies   = []string{"reject", "close_oldest", "close_lru"}
+	lifecyclePolicies  = []string{"keep", "close_idle", "freeze_idle"}
+	strategies         = []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
+	allocationPolicies = []string{"fcfs", "round_robin", "random"}
+	attachSchemes      = []string{"ws", "wss", "http", "https"}
+)
+
+func isValidCloakPlatform(platform string) bool {
+	return slices.Contains(cloakPlatforms, strings.ToLower(strings.TrimSpace(platform)))
+}
+
+func isValidStealthLevel(level string) bool {
+	return slices.Contains(stealthLevels, level)
 }
 
 func isValidEvictionPolicy(policy string) bool {
-	switch policy {
-	case "reject", "close_oldest", "close_lru":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(evictionPolicies, policy)
 }
 
 func isValidLifecyclePolicy(policy string) bool {
-	switch policy {
-	case "keep", "close_idle":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(lifecyclePolicies, policy)
+}
+
+func IdleTabLifecycle(policy string) bool {
+	return policy == "close_idle" || policy == "freeze_idle"
 }
 
 func ValidLifecyclePolicies() []string {
-	return []string{"keep", "close_idle"}
+	return slices.Clone(lifecyclePolicies)
 }
 
 func isValidStrategy(strategy string) bool {
-	switch strategy {
-	case "simple", "explicit", "simple-autorestart", "always-on", "no-instance":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(strategies, strategy)
 }
 
 func isValidAllocationPolicy(policy string) bool {
-	switch policy {
-	case "fcfs", "round_robin", "random":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(allocationPolicies, policy)
 }
 
 func isValidAttachScheme(scheme string) bool {
-	switch scheme {
-	case "ws", "wss", "http", "https":
-		return true
-	default:
-		return false
-	}
+	return slices.Contains(attachSchemes, scheme)
 }
 
 func ValidStealthLevels() []string {
-	return []string{"light", "medium", "full"}
+	return slices.Clone(stealthLevels)
 }
 
 func ValidEvictionPolicies() []string {
-	return []string{"reject", "close_oldest", "close_lru"}
+	return slices.Clone(evictionPolicies)
 }
 
 func ValidStrategies() []string {
-	return []string{"simple", "explicit", "simple-autorestart", "always-on", "no-instance"}
+	return slices.Clone(strategies)
 }
 
 // validateIDPIConfig validates the security.idpi sub-section.
@@ -506,12 +643,97 @@ func validatePositiveIntLimit(field string, value *int, max int) []error {
 	return nil
 }
 
-// ValidAllocationPolicies returns all valid allocation policy values.
 func ValidAllocationPolicies() []string {
-	return []string{"fcfs", "round_robin", "random"}
+	return slices.Clone(allocationPolicies)
 }
 
-// ValidAttachSchemes returns all valid attach URL schemes.
 func ValidAttachSchemes() []string {
-	return []string{"ws", "wss", "http", "https"}
+	return slices.Clone(attachSchemes)
+}
+
+func validateBrowsersBlock(fc FileConfig) []error {
+	bc := fc.Browsers
+	if bc.Default == "" && len(bc.Available) == 0 && len(bc.Config) == 0 {
+		return nil
+	}
+
+	var errs []error
+
+	// Validate default is a known browser. The registry is keyed by lowercase
+	// IDs; trim+lowercase like target validation does so "Cloak" validates
+	// the same everywhere.
+	if bc.Default != "" {
+		if _, ok := browsers.Get(strings.ToLower(strings.TrimSpace(bc.Default))); !ok {
+			errs = append(errs, fmt.Errorf("browsers.default: unknown browser %q (known: %v)", bc.Default, browsers.IDs()))
+		}
+	}
+
+	for i, name := range bc.Available {
+		if _, ok := browsers.Get(strings.ToLower(strings.TrimSpace(name))); !ok {
+			errs = append(errs, fmt.Errorf("browsers.available[%d]: unknown browser %q (known: %v)", i, name, browsers.IDs()))
+		}
+	}
+
+	if bc.Default != "" && len(bc.Available) > 0 {
+		found := false
+		wantDefault := strings.ToLower(strings.TrimSpace(bc.Default))
+		for _, name := range bc.Available {
+			if strings.ToLower(strings.TrimSpace(name)) == wantDefault {
+				found = true
+				break
+			}
+		}
+		if !found {
+			errs = append(errs, fmt.Errorf("browsers.default %q is not in browsers.available %v", bc.Default, bc.Available))
+		}
+	}
+
+	// browsers.config was accepted but never applied anywhere; reject it with
+	// guidance (mirroring the browser.provider retirement) rather than letting
+	// the overrides be silently ignored.
+	if len(bc.Config) > 0 {
+		errs = append(errs, fmt.Errorf("browsers.config is no longer supported; use browser.targets.<name> instead (e.g. \"browser\": {\"targets\": {\"cloak\": {\"binary\": \"/opt/cloak/bin\"}}})"))
+	}
+
+	return errs
+}
+
+// FileConfigAdvisories reports what a config file says that has no effect. These are
+// REPORTED, never gating: nothing here means the file is unsafe to load or the next write
+// is unsafe to make, so blocking a save on one would refuse work for no reason.
+//
+// A diagnostic belongs here only when the value is inert — PinchTab reads something else,
+// or nothing — and the reader has nothing to fix. Anything the user could get wrong, and
+// anything PinchTab will act on, stays in ValidateFileConfig where it gates.
+//
+//	observability.activity.stateDir  the path is derived from server.stateDir; the loader
+//	                                 never reads this key, and `config set` refuses it
+func FileConfigAdvisories(fc *FileConfig) []string {
+	if fc == nil {
+		return nil
+	}
+	var advisories []string
+	if strings.TrimSpace(fc.Observability.Activity.StateDir) != "" {
+		advisories = append(advisories, ActivityStateDirAdvisory)
+	}
+	advisories = append(advisories, proxyServerAdvisories(fc)...)
+	return advisories
+}
+
+// proxyServerAdvisories reports every proxy block that holds something but no server.
+// Target proxies are walked too: their blocks were never dropped at save, so a
+// serverless one has always been kept and silently unused — the same state this card's
+// defect produced for browser.proxy, one level down.
+func proxyServerAdvisories(fc *FileConfig) []string {
+	var advisories []string
+	if !fc.Browser.Proxy.IsZero() && fc.Browser.Proxy.HasNoServer() {
+		advisories = append(advisories, ProxyServerRequiredAdvisory("browser.proxy"))
+	}
+	for _, name := range SortedBrowserTargetNames(fc.Browser.Targets) {
+		target := fc.Browser.Targets[name]
+		if !target.Proxy.IsZero() && target.Proxy.HasNoServer() {
+			advisories = append(advisories, ProxyServerRequiredAdvisory(fmt.Sprintf("browser.targets.%s.proxy", name)))
+		}
+	}
+	return advisories
 }

@@ -6,23 +6,27 @@
 
 ```bash
 pinchtab server
-#或
+#or
 pinchtab daemon install
 ```
 
 启动实例可能是可选的，取决于策略/配置。
 
+HTTP API 需要服务器 token。本页的 `curl` 示例为简洁起见省略了它；在
+`export PINCHTAB_TOKEN=$(pinchtab config token --stdout)` 之后，再补上
+`-H "Authorization: Bearer $PINCHTAB_TOKEN"`。命令行界面替代方案会从你的配置读取 token。
+
 ```bash
 curl -s -X POST http://127.0.0.1:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
-  "profileName": "instance-1741400000000000000",
+  "profileName": "instance-1741400000000000000-9f3c2a1b",
   "port": "9868",
   "mode": "headless",
   "headless": true,
@@ -36,9 +40,9 @@ pinchtab instance start
 curl -s -X POST http://127.0.0.1:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/pinchtab/pinchtab"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab nav https://github.com/pinchtab/pinchtab
-# 响应
+# Response
 {
   "tabId": "CDP_TARGET_ID",
   "title": "GitHub - pinchtab/pinchtab",
@@ -50,9 +54,9 @@ pinchtab nav https://github.com/pinchtab/pinchtab
 
 ```bash
 curl -s "http://127.0.0.1:9867/snapshot?filter=interactive" | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab snap -i -c
-# 响应
+# Response
 {
   "nodes": [
     { "ref": "e0", "role": "link", "name": "Skip to content" },
@@ -66,9 +70,9 @@ pinchtab snap -i -c
 
 ```bash
 curl -s http://127.0.0.1:9867/text | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab text
-# 响应
+# Response
 {
   "text": "High-performance browser automation bridge and multi-instance orchestrator...",
   "title": "GitHub - pinchtab/pinchtab",
@@ -82,9 +86,9 @@ pinchtab text
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e14"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab click e14
-# 响应
+# Response
 {
   "success": true,
   "result": {
@@ -96,22 +100,22 @@ pinchtab click e14
 ### 截图
 
 ```bash
-curl -s http://127.0.0.1:9867/screenshot > smoke.jpg
+curl -s "http://127.0.0.1:9867/screenshot?raw=true" > smoke.jpg
 ls -lh smoke.jpg
-# 命令行界面 替代方案
-pinchtab ss -o smoke.jpg
-# 响应
+# CLI Alternative
+pinchtab screenshot -o smoke.jpg
+# Response
 Saved smoke.jpg (55876 bytes)
 ```
 
 ### 导出 PDF
 
 ```bash
-curl -s http://127.0.0.1:9867/pdf > smoke.pdf
+curl -s "http://127.0.0.1:9867/pdf?raw=true" > smoke.pdf
 ls -lh smoke.pdf
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab pdf -o smoke.pdf
-# 响应
+# Response
 Saved smoke.pdf (1494657 bytes)
 ```
 
@@ -125,13 +129,14 @@ Saved smoke.pdf (1494657 bytes)
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"fill","ref":"e3","text":"user@example.com"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab fill e3 "user@example.com"
-# 响应
+# Response
 {
   "success": true,
   "result": {
-    "filled": "user@example.com"
+    "filled": true,
+    "len": 16
   }
 }
 ```
@@ -142,9 +147,9 @@ pinchtab fill e3 "user@example.com"
 curl -s -X POST http://127.0.0.1:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"press","key":"Enter"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab press Enter
-# 响应
+# Response
 {
   "success": true,
   "result": {
@@ -153,23 +158,23 @@ pinchtab press Enter
 }
 ```
 
-### 生成工件
+### 生成产物
 
 ```bash
-curl -s http://127.0.0.1:9867/pdf > report.pdf
+curl -s "http://127.0.0.1:9867/pdf?raw=true" > report.pdf
 ls -lh report.pdf
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab pdf -o report.pdf
-# 响应
+# Response
 Saved report.pdf (1494657 bytes)
 ```
 
 ```bash
-curl -s http://127.0.0.1:9867/screenshot > page.jpg
+curl -s "http://127.0.0.1:9867/screenshot?raw=true" > page.jpg
 ls -lh page.jpg
-# 命令行界面 替代方案
-pinchtab ss -o page.jpg
-# 响应
+# CLI Alternative
+pinchtab screenshot -o page.jpg
+# Response
 Saved page.jpg (55876 bytes)
 ```
 
@@ -177,18 +182,20 @@ Saved page.jpg (55876 bytes)
 
 - 浏览器驱动的脚本
 - 内容提取和报告
-- 视觉检查和工件
+- 视觉检查和产物
 - 需要本地浏览器端点的自动化工具
 
-## 人工-代理开发表面
+## 人机协作开发接口
 
 当 Chrome 已经在远程调试模式下运行时，PinchTab 可以附加到它并通过相同的 API 暴露它。
+
+附加默认禁用；先用 `pinchtab config set security.attach.enabled true` 启用它并重启服务器。
 
 ### 1. 以远程调试模式启动 Chrome
 
 ```bash
 google-chrome --remote-debugging-port=9222
-# 或在某些系统上：
+# Or on some systems:
 # chromium --remote-debugging-port=9222
 ```
 
@@ -196,7 +203,7 @@ google-chrome --remote-debugging-port=9222
 
 ```bash
 curl -s http://127.0.0.1:9222/json/version | jq .
-# 响应
+# Response
 {
   "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/abc123"
 }
@@ -210,7 +217,7 @@ CDP_URL=$(curl -s http://127.0.0.1:9222/json/version | jq -r '.webSocketDebugger
 curl -s -X POST http://127.0.0.1:9867/instances/attach \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"dev-chrome\",\"cdpUrl\":\"$CDP_URL\"}" | jq .
-# 响应
+# Response
 {
   "id": "inst_abc12345",
   "profileId": "prof_def67890",
@@ -225,8 +232,8 @@ curl -s -X POST http://127.0.0.1:9867/instances/attach \
 
 ```bash
 curl -s http://127.0.0.1:9867/instances | jq .
-# 命令行界面 替代方案
-pinchtab instances
+# CLI Alternative
+pinchtab instance list
 ```
 
 这在以下情况很有用：

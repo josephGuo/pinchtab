@@ -4,7 +4,7 @@
 
 ## PinchTab 是什么
 
-PinchTab 是一个独立的 HTTP 服务器，通过 命令行界面 和 HTTP API 为您提供对 Chrome 的直接控制。
+PinchTab 是一个独立的 HTTP 服务器，通过命令行界面和 HTTP API 为您提供对 Chrome 的直接控制。
 
 PinchTab 有两个运行时：
 
@@ -12,7 +12,7 @@ PinchTab 有两个运行时：
 - `pinchtab bridge`：单实例桥接运行时
 
 服务器是正常的入口点。它管理配置文件、实例、路由、安全策略和仪表板。
-桥接是用于管理子实例背后的轻量级每个实例 HTTP 运行时。
+桥接是运行在受管子实例背后的轻量级每实例 HTTP 运行时。
 
 基本模型是：
 
@@ -36,21 +36,25 @@ PinchTab 有两个运行时：
 pinchtab server
 ```
 
+HTTP API 需要服务器 token。下面的 `curl` 示例为简洁起见省略了它；在
+`export PINCHTAB_TOKEN=$(pinchtab config token --stdout)` 之后，再补上
+`-H "Authorization: Bearer $PINCHTAB_TOKEN"`。命令行界面替代方案会从你的配置读取 token。
+
 ### 2. 启动实例
 
-默认情况下，我们使用始终开启策略。现在这是可选的，不是必需的。
+默认情况下我们使用 always-on 策略。这现在是可选的，并非必需。
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
-  "profileName": "instance-1741400000000000000",
+  "profileName": "instance-1741400000000000000-9f3c2a1b",
   "port": "9868",
   "mode": "headless",
   "headless": true,
@@ -64,9 +68,9 @@ pinchtab instance start
 curl -s -X POST http://localhost:9867/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab nav https://pinchtab.com
-# 响应
+# Response
 {
   "tabId": "CDP_TARGET_ID",
   "title": "PinchTab",
@@ -78,9 +82,9 @@ pinchtab nav https://pinchtab.com
 
 ```bash
 curl -s "http://localhost:9867/snapshot?filter=interactive" | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab snap -i -c
-# 响应
+# Response
 {
   "nodes": [
     { "ref": "e0", "role": "link", "name": "Docs" },
@@ -95,9 +99,9 @@ pinchtab snap -i -c
 curl -s -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e1"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab click e1
-# 响应
+# Response
 {
   "success": true,
   "result": {
@@ -114,7 +118,7 @@ pinchtab click e1
 - 有状态：配置文件持久化 cookies 和浏览器状态
 - 令牌高效：快照和文本端点比截图驱动的工作流更便宜
 - 灵活：无头、有头、基于配置文件或附加的 Chrome
-- 受控：健康、指标、认证和标签页锁定内置于系统中
+- 受控：健康检查、指标、认证和标签页锁定内置于系统中
 
 ## 常见功能
 

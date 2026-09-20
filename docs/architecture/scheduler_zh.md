@@ -1,4 +1,4 @@
-﻿# 调度器架构
+﻿# 调度器
 
 本页描述了 PinchTab 可选调度器的内部工作原理。
 
@@ -16,7 +16,7 @@
 
 ## 运行时位置
 
-在仪表板模式下，调度器仅在 `scheduler.enabled` 为 true 时创建。它直接注册在主多路复用器上，并暴露：
+在服务器模式下，调度器仅在 `scheduler.enabled` 为 true 时创建。它直接注册在主多路复用器（mux）上，并暴露：
 
 - `POST /tasks`
 - `GET /tasks`
@@ -74,11 +74,20 @@ client
 
 结果存储保存任务快照，并在配置的 TTL 后驱逐终端任务。
 
-### ManagerResolver
+### Resolver
 
-解析器通过 `instance.Manager.FindInstanceByTabID` 将 `tabId` 映射到拥有实例端口。
+调度器直接把编排器作为它的 `InstanceResolver`：`ResolveTabInstance(tabId)` 将一个 `tabId` 映射到所属实例端口，这就是调度器知道把执行转发到哪里的方式。
 
-这是调度器知道将执行转发到哪里的方式。
+编排器还实现了 `RequestAuthorizer`。分发之前，执行器调用 `AuthorizeTabRequest(tabId, req)`，它经由编排器单一的跳认证（hop-auth）所有者 `applyInstanceAuth` 路由：请求携带实例的 bearer 令牌，在一次受信任的子跳上还携带内部令牌。这正是让实例接受 `X-PinchTab-*` 身份头、而不是在入口处剥离它们的原因，从而让实例把动作归因为 `scheduler` 而非 `client`。受管子实例以关闭活动记录的方式运行，因此该归因只会由一个记录活动的实例持久化。一个不实现 `RequestAuthorizer` 的解析器不发送任何凭据，而需要凭据的实例会以 `401` 拒绝该任务。
+
+### 活动记录
+
+调度器与服务器的活动记录器运行在同一进程中，因此它通过一个 `ActivitySink` 直接在那里记录每个分发的任务（`internal/server` 把仪表板 feed 记录器传入 `New`）。每个任务一个事件，携带来源 `scheduler`、任务的 `agentId` 和 `tabId`、动作种类，以及执行器返回后的结果状态和耗时。该事件总是到达实时仪表板流（`/api/events`）；它被写入活动日志并因此在重载后由 `/api/activity` 返回，仅当 `observability.activity.events.scheduler` 启用时——它像其他非客户端来源一样默认关闭。来自实例的失败响应用实例自身的状态记录（例如一个未匹配任何内容的选择器记为 `404`）加上执行器的错误文本；一个从未产生响应的传输失败记为 `502`。
+
+这个 sink 是仪表板 feed 中一个计划动作的唯一来源，记录一次，且独立于任何实例级记录：
+
+- 受管子实例以关闭活动记录的方式运行，因此子实例绝不记录转发的动作，也就没有重复。
+- 附加的外部桥接把转发的动作记录到它自己的记录器和 feed，而非服务器的，因此它在仪表板流中也不会重复计数。
 
 ## 分发生命周期
 
@@ -126,7 +135,7 @@ queued -> rejected
 
 存在两条截止日期路径：
 
-- 排队任务过期：后台收割器每秒扫描排队任务并将过期任务标记为失败
+- 排队任务过期：后台收割器每 5 秒扫描排队任务并将过期任务标记为失败
 - 运行任务截止日期：每个任务的上下文截止日期由对执行器的 HTTP 请求强制执行
 
 排队过期当前记录：
@@ -236,7 +245,7 @@ POST /tabs/{tabId}/action
 
 ### 批量提交
 
-`POST /tasks/batch` 接受一组任务定义（最多 50 个），共享单个 `agentId` 和可选的 `callbackUrl`。每个任务通过 `Submit()` 单独提交，因此队列准入限制按任务应用。
+`POST /tasks/batch` 接受一组任务定义（最多 `scheduler.maxBatchSize`，默认 50），共享单个 `agentId` 和可选的 `callbackUrl`。每个任务通过 `Submit()` 单独提交，因此队列准入限制按任务应用。
 
 批处理端点支持部分失败：如果某些任务被拒绝（队列已满），接受的任务仍会被提交，并且响应包含每个任务的状态。
 

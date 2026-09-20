@@ -4,7 +4,7 @@ PinchTab 包含一个内置的 Web 仪表板，用于监控实例、管理配置
 
 仪表板是完整服务器的一部分：
 
-- `pinchtab` 或 `pinchtab server` 启动完整服务器并提供仪表板
+- `pinchtab server`（或来自 `pinchtab daemon install` 的守护进程）启动完整服务器并提供仪表板
 - `pinchtab bridge` 不提供仪表板
 
 您可以在以下地址打开仪表板：
@@ -19,11 +19,12 @@ PinchTab 包含一个内置的 Web 仪表板，用于监控实例、管理配置
 
 ## 仪表板概览
 
-当前仪表板公开三个主要页面：
+当前仪表板公开四个主要页面：
 
-1. **监控**
-2. **配置文件**
-3. **设置**
+1. **监控（Monitoring）**
+2. **代理（Agents）**
+3. **配置文件（Profiles）**
+4. **设置（Settings）**
 
 UI 是一个由 Go 服务器提供服务的 React SPA。
 
@@ -59,6 +60,13 @@ UI 是一个由 Go 服务器提供服务的 React SPA。
 
 ---
 
+## 代理页面
+
+代理页面列出服务器已知的代理（来自 `GET /api/agents`），并显示所选代理记录的活动，经
+`GET /api/agents/{id}/events` 实时更新。
+
+---
+
 ## 配置文件页面
 
 ![仪表板配置文件](media/dashboard-profiles.jpeg)
@@ -78,15 +86,16 @@ UI 是一个由 Go 服务器提供服务的 React SPA。
 - 停止配置文件的运行实例
 - 编辑配置文件元数据
 - 删除配置文件
-- 打开配置文件详细信息模态框
+- 打开配置文件详细信息面板
 
 启动流程在后台使用服务器 API：
 
 ```bash
 curl -X POST http://localhost:9867/profiles \
+  -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"work","useWhen":"Team account workflows"}'
-# 响应
+# Response
 {
   "status": "created",
   "id": "prof_278be873",
@@ -96,11 +105,12 @@ curl -X POST http://localhost:9867/profiles \
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
+  -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --profile prof_278be873 --mode headed
-# 响应
+# Response
 {
   "id": "inst_ea2e747f",
   "profileId": "prof_278be873",
@@ -114,22 +124,23 @@ pinchtab instance start --profile prof_278be873 --mode headed
 
 ---
 
-## 配置文件详细信息模态框
+## 配置文件详细信息面板
 
-配置文件详细信息显示在模态框中，而不是作为单独的顶级页面。
+配置文件详细信息显示在配置文件列表旁边的一个面板中，而不是作为单独的顶级页面。
 
-模态框当前包含以下标签页：
+该面板当前包含以下标签页：
 
-- **配置文件**
-- **实时**
-- **日志**
+- **配置文件（Profile）**
+- **实时（Live）**
+- **标签页（Tabs）**
+- **日志（Logs）**
 
 从那里您可以：
 
 - 查看配置文件 ID 和元数据
 - 编辑名称和 `useWhen`
 - 检查运行实例的实时标签页
-- 打开标签页预览的屏幕截图瓦片
+- 打开用于标签页预览的 screencast 磁贴
 
 ---
 
@@ -150,10 +161,12 @@ pinchtab instance start --profile prof_278be873 --mode headed
 - 网络和附加
 - 浏览器运行时
 - 超时
+- AutoSolver
+- Observability（可观测性）
 
 您可以做什么：
 
-- 更改本地仪表板首选项，如监控和屏幕截图设置
+- 更改本地仪表板首选项，如监控和 screencast 设置
 - 从 `GET /api/config` 加载后端配置
 - 通过 `PUT /api/config` 保存后端配置
 - 查看服务器级更改是否需要重启
@@ -172,11 +185,11 @@ pinchtab instance start --profile prof_278be873 --mode headed
 - `security.idpi.wrapContent`
 - `security.idpi.customPatterns`
 
-健康负载也会显示摘要信息：
+健康负载也会显示摘要信息（该 API 需要服务器 token；见 `pinchtab config token --stdout`）：
 
 ```bash
-curl http://localhost:9867/health | jq .
-# 响应
+curl -H "Authorization: Bearer $PINCHTAB_TOKEN" http://localhost:9867/health | jq .
+# Response
 {
   "status": "ok",
   "mode": "dashboard",
@@ -196,7 +209,7 @@ curl http://localhost:9867/health | jq .
 主要流端点：
 
 ```bash
-curl http://localhost:9867/api/events
+curl -H "Authorization: Bearer $PINCHTAB_TOKEN" http://localhost:9867/api/events
 ```
 
 此流携带：
@@ -219,7 +232,7 @@ curl http://localhost:9867/api/events
 ### 仪表板未加载
 
 ```bash
-curl http://localhost:9867/health
+pinchtab health
 ```
 
 如果服务器已启动，请尝试：
@@ -233,12 +246,13 @@ curl http://localhost:9867/health
 
 ```bash
 curl -X POST http://localhost:9867/instances/start \
+  -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start
 ```
 
 ### 没有实时配置文件预览
 
-配置文件必须有运行实例，才能在配置文件详细信息模态框的实时标签页中显示实时标签页数据。
+配置文件必须有运行实例，才能在配置文件详细信息面板的实时标签页中显示实时标签页数据。

@@ -98,6 +98,12 @@ func TestNetworkBuffer_TruncatesOversizedFields(t *testing.T) {
 	if len(entry.PostData) > testMaxNetworkPostDataBytes {
 		t.Fatalf("PostData length = %d, want <= %d", len(entry.PostData), testMaxNetworkPostDataBytes)
 	}
+	if !entry.PostDataTruncated {
+		t.Error("a request body cut by the buffer reports no truncation, so a reader of the entry sees a clipped body as complete")
+	}
+	if entry.PostDataSkipped {
+		t.Errorf("a cut body must not also report skipped: %q", entry.PostDataSkipReason)
+	}
 	totalHeaderBytes := 0
 	for key, value := range entry.RequestHeaders {
 		totalHeaderBytes += len(key) + len(value)
@@ -143,6 +149,7 @@ func TestNetworkFilter_Match(t *testing.T) {
 		{"status range match", NetworkFilter{StatusRange: "4xx"}, true},
 		{"status range no match", NetworkFilter{StatusRange: "2xx"}, false},
 		{"type match", NetworkFilter{ResourceType: "xhr"}, true},
+		{"fetch matches xhr compatibility", NetworkFilter{ResourceType: "fetch"}, true},
 		{"type no match", NetworkFilter{ResourceType: "document"}, false},
 		{"combined match", NetworkFilter{Method: "POST", StatusRange: "4xx"}, true},
 		{"combined partial no match", NetworkFilter{Method: "GET", StatusRange: "4xx"}, false},
@@ -155,6 +162,14 @@ func TestNetworkFilter_Match(t *testing.T) {
 				t.Errorf("Match() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+
+	entry.ResourceType = "Fetch"
+	if !(NetworkFilter{ResourceType: "xhr"}).Match(entry) {
+		t.Error("type=xhr should match fetch entries for compatibility")
+	}
+	if !(NetworkFilter{ResourceType: "fetch"}).Match(entry) {
+		t.Error("type=fetch should match fetch entries")
 	}
 }
 

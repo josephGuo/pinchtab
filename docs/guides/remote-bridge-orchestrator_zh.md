@@ -1,12 +1,12 @@
-﻿# 远程桥接与编排器
+﻿# 远程桥接
 
 当以下情况时使用本指南：
 
 - PinchTab 编排器在一台机器上运行
 - PinchTab 桥接服务器在另一台机器上运行
-- 您希望代理在浏览器工作在远程进行时保持与编排器的通信
+- 你希望代理在浏览器工作在远程进行时保持与编排器的通信
 
-这是一种高级部署模式。仅当您了解安全模型、将桥接保持在私有或其他封闭网络上，并且避免将桥接或编排器广泛暴露到超出需要访问它们的系统之外时使用。高风险端点系列应保持禁用，除非明确需要，如果启用，它们应仅可由部署中涉及的最少受信任系统访问。
+这是一种高级部署模式。仅当你了解安全模型、将桥接保持在私有或其他封闭网络上，并且避免将桥接或编排器广泛暴露到超出需要访问它们的系统之外时使用。高风险端点系列应保持禁用，除非明确需要，如果启用，它们应仅可由部署中涉及的最少受信任系统访问。
 
 现在这是通过以下方式支持的编排模式：
 
@@ -22,14 +22,14 @@ POST /instances/attach-bridge
 
 现在有三种不同的模型：
 
-- 本地管理实例：编排器启动并拥有本地桥接进程
+- 本地受管实例：编排器启动并拥有本地桥接进程
 - 附加的 Chrome：编排器使用 `POST /instances/attach` 注册外部 CDP 浏览器
 - 附加的桥接：编排器使用 `POST /instances/attach-bridge` 注册外部 PinchTab 桥接
 
 对于远程桥接附加，控制流程是：
 
 ```text
-代理 -> 编排器 -> 附加的远程桥接 -> Chrome
+agent -> orchestrator -> attached remote bridge -> Chrome
 ```
 
 主要的实用规则是：
@@ -48,7 +48,7 @@ POST /instances/attach-bridge
 - 代理在机器 A 上保持单一控制平面
 - 实际的浏览器渲染在机器 B 上进行
 
-当您想要一个编排表面但不想在每台开发机器上运行有头 Chrome 时，这很有用。
+当你想要一个编排表面但不想在每台开发机器上运行有头 Chrome 时，这很有用。
 
 ### 区域本地浏览器工作器
 
@@ -104,9 +104,9 @@ POST /instances/attach-bridge
 - `ws` 和 `wss` 仍用于 CDP 附加
 - `baseUrl` 必须是裸桥接源；不要包含凭据、查询字符串、片段或路径
 
-如果您使用 `allowHosts: ["*"]`，编排器将接受任何具有允许方案的可访问桥接主机。这是一个有文档记录的、非默认的、降低安全性的覆盖：它完全移除了主机允许列表，只应在隔离的、操作员控制的网络上使用。
+如果你使用 `allowHosts: ["*"]`，编排器将接受任何具有允许方案的可访问桥接主机。这是一个有文档记录的、非默认的、降低安全性的覆盖：它完全移除了主机允许列表，只应在隔离的、操作员控制的网络上使用。
 
-如果您将 `allowSchemes` 仅保留为 `ws,wss`，`attach-bridge` 将被拒绝。
+如果你将 `allowSchemes` 仅保留为 `ws,wss`，`attach-bridge` 将被拒绝。
 
 ---
 
@@ -115,12 +115,12 @@ POST /instances/attach-bridge
 在远程机器上，配置并启动桥接：
 
 ```bash
-# 设置网络访问的绑定地址
+# Set bind address for network access
 pinchtab config set server.bind 0.0.0.0
 pinchtab config set server.port 9868
 pinchtab config set server.token bridge-secret-token
 
-# 启动桥接
+# Start the bridge
 pinchtab bridge
 ```
 
@@ -145,7 +145,7 @@ curl -H "Authorization: Bearer bridge-secret-token" \
   http://10.0.12.24:9868/health
 ```
 
-您应该得到 `200 OK`。
+你应该得到 `200 OK`。
 
 `attach-bridge` 也执行自己的健康探测，但首先直接检查使网络和身份验证问题更容易调试。
 
@@ -225,7 +225,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
   http://127.0.0.1:9867/tabs/<tabId>/snapshot
 ```
 
-如果您的活动策略使用简写路由，这些路由也可以落在附加的桥接上，因为实例选择现在从规范实例 URL 而不仅仅是本地端口工作。
+如果你的活动策略使用简写路由，这些路由也可以落在附加的桥接上，因为实例选择现在从规范实例 URL 而不仅仅是本地端口工作。
 
 ---
 
@@ -236,7 +236,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 1. 客户端到编排器
 2. 编排器到附加的桥接
 
-这意味着您可以使用不同的令牌：
+这意味着你可以使用不同的令牌：
 
 - 客户端发送 `Authorization: Bearer orchestrator-token`
 - 编排器向远程桥接发送 `Authorization: Bearer bridge-secret-token`
@@ -261,7 +261,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 - 对于附加的桥接，编排器还会在注销前进行尽力而为的 `POST /shutdown` 调用
 - 不支持通过编排器启动附加的非桥接实例
 
-如果您需要真正的远程进程启动，那是一个不同的问题，需要传输，如 SSH、代理或调度器支持的工作器系统。
+如果你需要真正的远程进程启动，那是一个不同的问题，需要传输，如 SSH、代理或调度器支持的工作器系统。
 
 ---
 
@@ -272,7 +272,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 推荐做法：
 
 - 保持 `allowHosts` 狭窄
-- 只允许您实际需要的方案
+- 只允许你实际需要的方案
 - 使用专用的桥接令牌
 - 当桥接穿越不受信任的网络时，优先使用 `https`
 - 尽可能将桥接本身放在网络 ACL 或隧道后面
@@ -291,7 +291,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 此功能不执行以下操作：
 
 - 它不会在远程机器上启动桥接进程
-- 它不会在主机之间同步配置文件目录
+- 它不会在主机之间同步 Profile 目录
 - 它不会跨机器迁移标签页或浏览器状态
 - 它不会自动发现工作器
 
@@ -305,7 +305,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 
 ## 仅中心模式
 
-如果您只想要远程桥接，永远不想要本地 Chrome，请使用 `no-instance` 策略：
+如果你只想要远程桥接，永远不想要本地 Chrome，请使用 `no-instance` 策略：
 
 ```json
 {
@@ -321,13 +321,13 @@ curl -H "Authorization: Bearer orchestrator-token" \
 
 ## 总结
 
-当您需要以下情况时使用 `POST /instances/attach-bridge`：
+当你需要以下情况时使用 `POST /instances/attach-bridge`：
 
 - 机器 A 上的编排器
 - 机器 B 上的桥接
 - 代理仍只与机器 A 通信
 - 远程浏览器工作，无需远程进程管理复杂性
 
-当您想要一个永远不启动本地 Chrome 的专用中心时，使用 `no-instance` 策略。
+当你想要一个永远不启动本地 Chrome 的专用中心时，使用 `no-instance` 策略。
 
-当您想要分布式执行与单一控制平面时，这是正确的功能。
+当你想要分布式执行与单一控制平面时，这是正确的功能。

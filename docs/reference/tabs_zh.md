@@ -1,38 +1,38 @@
-﻿# 标签页
+﻿# Tabs（标签页）
 
-标签页是浏览、提取、交互和诊断的主要执行表面。
+标签页是浏览、提取、交互和诊断的主要执行面。
 
-一旦你已有标签页 ID，就可以使用标签页范围的 HTTP 路由。在 命令行界面 中，使用带有 `--tab <id>` 的正常顶级浏览器命令。
+一旦已有标签页 ID，就用标签页范围的 HTTP 路由。命令行界面中，用带 `--tab <id>` 的常规顶级浏览器命令。
 
 `pinchtab tab` 本身仅用于：
 
 - 列出标签页
 - 聚焦标签页
-- 打开新标签页
 - 关闭标签页
+- 人工交接（`handoff`、`handoff-status`、`resume`）
 
-没有 `pinchtab tab navigate` 或 `pinchtab tab click` 这样的子命令。
+用 `pinchtab nav <url> --new-tab` 打开新标签页。没有 `pinchtab tab navigate` 或 `pinchtab tab click` 之类子命令。
 
 ## 顶级浏览器命令
 
-这些页面涵盖了简写路由和匹配的 命令行界面 命令：
+下列页面涵盖简写路由及对应的命令行界面命令：
 
-- [健康](./health.md)
-- [导航](./navigate.md)
-- [快照](./snapshot.md)
-- [文本](./text.md)
-- [点击](./click.md)
-- [输入](./type.md)
-- [填充](./fill.md)
-- [截图](./screenshot.md)
+- [Health](./health.md)
+- [Navigate](./navigate.md)
+- [Snapshot](./snapshot.md)
+- [Text](./text.md)
+- [Click](./click.md)
+- [Type](./type.md)
+- [Fill](./fill.md)
+- [Screenshot](./screenshot.md)
 - [PDF](./pdf.md)
-- [评估](./eval.md)
-- [按键](./press.md)
-- [悬停](./hover.md)
-- [滚动](./scroll.md)
-- [选择](./select.md)
-- [聚焦](./focus.md)
-- [查找](./find.md)
+- [Eval](./eval.md)
+- [Press](./press.md)
+- [Hover](./hover.md)
+- [Scroll](./scroll.md)
+- [Select](./select.md)
+- [Focus](./focus.md)
+- [Find](./find.md)
 
 ## 在特定实例中打开标签页
 
@@ -40,7 +40,7 @@
 curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# 响应
+# Response
 {
   "tabId": "8f9c7d4e1234567890abcdef12345678",
   "url": "https://pinchtab.com",
@@ -48,13 +48,13 @@ curl -X POST http://localhost:9867/instances/inst_ea2e747f/tabs/open \
 }
 ```
 
-仍然没有专用的实例范围标签页打开 命令行界面 命令。命令行界面 快捷方式是：
+仍无专用的实例范围打开标签页命令行界面命令。命令行界面快捷方式为：
 
 ```bash
 pinchtab instance navigate inst_ea2e747f https://pinchtab.com
 ```
 
-该命令为实例打开标签页，然后导航它。
+该命令在一次 `tabs/open` 调用中就为已在该 URL 上的实例打开标签页。
 
 ## 列出标签页
 
@@ -62,32 +62,36 @@ pinchtab instance navigate inst_ea2e747f https://pinchtab.com
 
 ```bash
 curl http://localhost:9867/tabs
-# 响应（API 始终返回 JSON）
+# Response (API always returns JSON)
 {
   "tabs": [
     {
       "id": "8f9c7d4e1234567890abcdef12345678",
       "url": "https://pinchtab.com",
       "title": "PinchTab",
-      "type": "page"
+      "type": "page",
+      "status": "active"
     }
   ]
 }
 
-# 命令行界面 替代方案（默认人类可读）
+# CLI Alternative (human-readable by default)
 pinchtab tab
-# 输出: *8f9c7d4e...  https://pinchtab.com  PinchTab
+# Output: *8f9c7d4e...  https://pinchtab.com  PinchTab
 
-pinchtab tab --json                    # 完整 JSON 响应
+pinchtab tab --json                    # Full JSON response
 ```
 
 注意：
 
-- `GET /tabs` 不是全舰队库存
-- 在桥接模式或简写模式下，它列出活动浏览器上下文中的标签页
+- `GET /tabs` 不是全机队清单
+- 桥接模式或简写模式下列出活动浏览器上下文的标签页
 - `pinchtab tab` 遵循该简写行为
+- 当前标签页列在最前
+- `about:blank`、`chrome://`、`chrome-extension://`、`devtools://`、`file://` 或服务器自身端口上的标签页不列出
+- `status` 为 `active`，或带 `handoffReason` 和 `pausedAt` 的 `paused_handoff`；锁定标签页还带 `owner` 和 `lockedUntil`，标签页有 `browserContextId` 时也会出现
 
-### 一个实例的标签页
+### 单个实例的标签页
 
 ```bash
 curl http://localhost:9867/instances/inst_ea2e747f/tabs
@@ -99,24 +103,29 @@ curl http://localhost:9867/instances/inst_ea2e747f/tabs
 curl http://localhost:9867/instances/tabs
 ```
 
-当你需要编排器范围的视图时，使用 `GET /instances/tabs`。
+需要编排器范围视图时用 `GET /instances/tabs`。
 
-## 从 命令行界面 聚焦、创建和关闭
+两个实例路由都返回 `{"id","instanceId","url","title"}` 对象的裸 JSON 数组。结果按实例缓存；加 `?fresh=1` 重新拉取。
+
+## 从命令行界面聚焦与关闭
 
 ```bash
-pinchtab tab                           # 列出标签页
-pinchtab tab 2                         # 按 1 基索引聚焦标签页
-pinchtab tab 8f9c7d4e1234...           # 按标签页 ID 聚焦标签页
-pinchtab tab new                       # 打开空白标签页
-pinchtab tab new https://pinchtab.com   # 打开并导航
-pinchtab tab close 8f9c7d4e1234...     # 关闭标签页
+pinchtab tab                           # list tabs
+pinchtab tab 2                         # focus tab by 1-based index
+pinchtab tab 8f9c7d4e1234...           # focus tab by tab ID
+pinchtab nav https://pinchtab.com --new-tab  # open a new tab and navigate it
+pinchtab tab close 8f9c7d4e1234...     # close tab
 ```
 
-数字参数被解析为相对于 `GET /tabs` 的 1 基索引。非数字参数被视为标签页 ID。
+数字参数按相对 `GET /tabs` 的 1 基索引解析。非数字参数视为标签页 ID。
+
+聚焦、导航或以其他方式访问受跟踪标签页会把它标记为当前标签页。未限定作用域的命令使用该当前标签页；若记录的当前标签页已过期，PinchTab 回退到最近使用的受跟踪标签页。
+
+顶级导航在有当前标签页时使用它。显式想要另一个标签页时用 `pinchtab nav <url> --new-tab`。
 
 ## 操作现有标签页
 
-使用标签页范围的 HTTP 路由或带有 `--tab` 的顶级 命令行界面 命令。
+用标签页范围的 HTTP 路由或带 `--tab` 的顶级命令行界面命令。
 
 ### 导航
 
@@ -124,15 +133,15 @@ pinchtab tab close 8f9c7d4e1234...     # 关闭标签页
 curl -X POST http://localhost:9867/tabs/<tabId>/navigate \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab nav https://pinchtab.com --tab <tabId>
 ```
 
 ### 快照
 
 ```bash
-curl "http://localhost:9867/tabs/<tabId>/snapshot?interactive=true&compact=true"
-# 命令行界面 替代方案
+curl "http://localhost:9867/tabs/<tabId>/snapshot?filter=interactive&format=compact"
+# CLI Alternative
 pinchtab snap --tab <tabId> -i -c
 ```
 
@@ -140,7 +149,7 @@ pinchtab snap --tab <tabId> -i -c
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/text?mode=raw"
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab text --tab <tabId> --raw
 ```
 
@@ -150,24 +159,24 @@ pinchtab text --tab <tabId> --raw
 curl -X POST http://localhost:9867/tabs/<tabId>/find \
   -H "Content-Type: application/json" \
   -d '{"query":"login button"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab find --tab <tabId> "login button"
 ```
 
-### 操作
+### 动作
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"click","ref":"e5"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab click --tab <tabId> e5
 pinchtab fill --tab <tabId> '#email' 'ada@example.com'
 pinchtab wait --tab <tabId> 'text:Done'
 pinchtab network --tab <tabId> --limit 20
 ```
 
-低级指针控制使用相同的操作表面：
+低层指针控制使用同一动作面：
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/action \
@@ -182,15 +191,15 @@ curl -X POST http://localhost:9867/tabs/<tabId>/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"mouse-wheel","x":400,"y":320,"deltaY":240}'
 
-# 命令行界面 替代方案
+# CLI Alternatives
 pinchtab mouse move --tab <tabId> e5
 pinchtab mouse down --tab <tabId> --button left
 pinchtab mouse wheel --tab <tabId> 240 --dx 40
 ```
 
-### 切换状态
+### 交接状态
 
-人工切换是标签页范围的，可通过 命令行界面 或 API 使用。
+人工交接是标签页范围的，可通过命令行界面或 API 使用。
 
 ```bash
 pinchtab tab handoff <tabId> --reason captcha --timeout-ms 120000
@@ -200,7 +209,7 @@ pinchtab tab resume <tabId> --status completed
 
 API 等价物：
 
-当标签页被标记为 `paused_handoff` 时，操作执行路由会拒绝并返回 `409 tab_paused_handoff`，直到标签页被恢复或可选的超时过期。
+标签页被标记为 `paused_handoff` 时，动作执行路由以 `409 tab_paused_handoff` 拒绝，直到该标签页被恢复或可选超时到期。
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/handoff \
@@ -214,14 +223,13 @@ curl -X POST http://localhost:9867/tabs/<tabId>/resume \
   -d '{"status":"completed","resolvedData":{"operator":"human"}}'
 ```
 
-当自动化必须为 CAPTCHA、2FA 提示、登录批准或其他仅人工步骤暂停时使用此功能。
-当提供超时时，切换状态包括 `expiresAt` 和 `timeoutMs`。
+当自动化必须为 CAPTCHA、2FA 提示、登录批准或其他仅人工步骤暂停时使用。提供超时后，交接状态包含 `expiresAt` 和 `timeoutMs`。
 
 ### 截图
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/screenshot?raw=true" > out.jpg
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab screenshot --tab <tabId> -o out.jpg
 ```
 
@@ -229,11 +237,11 @@ pinchtab screenshot --tab <tabId> -o out.jpg
 
 ```bash
 curl "http://localhost:9867/tabs/<tabId>/pdf?raw=true" > page.pdf
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab pdf --tab <tabId> -o page.pdf
 ```
 
-##  Cookies
+## Cookies
 
 ```bash
 curl http://localhost:9867/tabs/<tabId>/cookies
@@ -242,7 +250,20 @@ curl -X POST http://localhost:9867/tabs/<tabId>/cookies \
   -d '{"cookies":[{"name":"session","value":"abc"}]}'
 ```
 
-目前没有专用的顶级 cookies 命令行界面 命令。
+`POST` 把 `url` 默认设为标签页当前页面，因此注入会话 cookie 无需 URL 查找。空 `value` 的 cookie 被设置（清空但不删除）；无 `name` 的 cookie 以 400 拒绝而非跳过。`DELETE /tabs/<tabId>/cookies` 仅寻址上是标签页范围的——它清空每个源的每个 cookie，与 `DELETE /cookies` 完全一样。
+
+命令行界面中同样的操作：
+
+```bash
+pinchtab cookies get --tab <tabId>                  # read cookies, with values
+pinchtab cookies get --tab <tabId> --name session   # one cookie
+pinchtab cookies set session abc123 --tab <tabId>   # set on the tab's current URL
+pinchtab cookies clear                              # every cookie, every origin
+```
+
+`cookies set` 接受 `--url`、`--domain`、`--path`、`--same-site`、`--secure` 和 `--http-only`；服务器报告 cookie 未设置时它以非零退出。没有按单个 cookie 删除的动词——`clear` 是浏览器范围的，命令行界面里没有东西能恢复它擦除的内容，因此重新设置你需要的，或用 `state load`。
+
+读取、写入和清空 cookies 需要 `security.allowCookies=true`。
 
 ## 指标
 
@@ -250,27 +271,28 @@ curl -X POST http://localhost:9867/tabs/<tabId>/cookies \
 curl http://localhost:9867/tabs/<tabId>/metrics
 ```
 
-这通过桥接报告标签页的内存指标，而不是完整的每个标签页性能配置文件。
+这里报告的是所属浏览器实例的聚合内存——整个进程树——而非孤立的单标签页读数：标签页 id 只是选定要询问的实例。同一实例的两个标签页返回相同数字。见 [Memory monitoring](../guides/memory-monitoring.md)。
 
-## 锁定和解锁
+## 锁定与解锁
 
-标签页锁定仅通过 API 可用。
+标签页锁定仅 API 可用。
 
 ```bash
 curl -X POST http://localhost:9867/tabs/<tabId>/lock \
   -H "Content-Type: application/json" \
-  -d '{"owner":"my-agent","ttl":60}'
+  -d '{"owner":"my-agent","timeoutSec":60}'
 
 curl -X POST http://localhost:9867/tabs/<tabId>/unlock \
   -H "Content-Type: application/json" \
   -d '{"owner":"my-agent"}'
 ```
 
-在 `POST /lock` 和 `POST /unlock` 也有活动标签页形式。
+`owner` 必填。`timeoutSec` 可选，默认 10 分钟。lock 应答 `{"locked":true,"owner":"...","expiresAt":"..."}`，unlock 应答 `{"unlocked":true}`，冲突的 owner 得到 `409`。
+
+根路径形式 `POST /lock` 和 `POST /unlock` 也存在；它们把标签页放在主体里的 `tabId`（必填）。
 
 ## 重要限制
 
-- 没有用于获取单个标签页元数据的 `GET /tabs/{id}` 端点。
-- `GET /tabs` 和 `GET /instances/tabs` 服务于不同的目的，不可互换。
-- 在 命令行界面 中，标签页范围的工作通过带有 `--tab` 的顶级命令进行，而不是通过 `pinchtab tab <subcommand>` 变体。
-- 目前没有专用的 命令行界面 `handoff` 或 `resume` 命令。
+- 没有 `GET /tabs/{id}` 端点。`GET /tabs/{id}/state` 报告单个标签页的 `tabId`、`url`、`title`、`dialogPresent`/`dialog`、`load`（`readyState`、`navigationInProgress`、`networkIdle`、`state`）和 `actionability`。
+- `GET /tabs` 和 `GET /instances/tabs` 用途不同，不可互换。
+- 命令行界面中，标签页范围工作通过带 `--tab` 的顶级命令进行，而非 `pinchtab tab <subcommand>` 变体——`handoff`、`resume`、`handoff-status` 除外，它们既暴露为顶级命令，也暴露为 `pinchtab tab handoff|resume|handoff-status` 子命令。

@@ -1,5 +1,14 @@
 ﻿# Lite Engine：使用 Gost-DOM 的无 Chrome DOM 捕获
 
+> **已弃用：** 本文档描述旧的引擎模型（`chrome`/`lite`/`auto`）。
+> 引擎已被 **浏览器 provider** 模型取代。请在配置中使用 `browsers.default`
+> 并选择 provider：`chrome`、`cloak` 或 `ghost-chrome`。
+> 详见 [terminology](../architecture/terminology.md)。
+> 下面的代码在 HEAD 处均已不存在：`internal/engine`（Router、rules、`LiteEngine`）、
+> `server.engine` 键（现在是配置校验错误）和 `X-Engine` 响应头均已移除。
+> Gost-DOM 静态路径现位于 `internal/browsers/ghostchrome/staticfetch`，
+> 由 `ghost-chrome` provider 在升级到 Chrome 之前使用。
+
 **分支：** `feat/lite-engine-gostdom`
 **问题：** [#201](https://github.com/pinchtab/pinchtab/issues/201)
 **相关草稿 PR：** [#200](https://github.com/pinchtab/pinchtab/pull/200)
@@ -35,7 +44,7 @@ type Engine interface {
 路由器评估 `RouteRule` 实现的有序链。第一个返回非 `Undecided` 裁决的规则获胜。
 
 ```
-请求 → 路由器 → [规则 1] → [规则 2] → ... → [回退规则] → 引擎
+Request → Router → [Rule 1] → [Rule 2] → ... → [Fallback Rule] → Engine
 ```
 
 规则可通过 `AddRule()` / `RemoveRule()` 在运行时热交换 — 无需更改处理程序代码。
@@ -82,12 +91,13 @@ type Engine interface {
 ### 修改的文件（8 个）
 | 文件 | 更改 |
 |------|--------|
-| `internal/config/config.go` | 向 RuntimeConfig + ServerConfig 添加 `Engine` 字段 |
+| `internal/config/config_types.go` | 向 RuntimeConfig + ServerConfig 添加 `Engine` 字段 |
 | `internal/handlers/handlers.go` | 添加 `Router *engine.Router` 字段，`useLite()` 辅助函数 |
-| `internal/handlers/navigation.go` | ensureChrome 之前的 Lite 快速路径 |
+| `internal/handlers/navigation.go` | ensureBrowser 之前的 Lite 快速路径 |
 | `internal/handlers/snapshot.go` | 带有 SnapshotNode → A11yNode 转换的 Lite 快速路径 |
 | `internal/handlers/text.go` | 返回纯文本的 Lite 快速路径 |
-| `cmd/pinchtab/cmd_bridge.go` | 基于配置模式的引擎路由器连接 |
+| `cmd/pinchtab/cmd_bridge.go` | 从 CLI flag 和配置解析引擎模式（`resolveBridgeEngine`） |
+| `internal/server/bridge.go` | 构造 `engine.Router`（`engine.NewRouter(mode, lite)`）并将其接入处理器 |
 | `go.mod` | 添加 gost-dom/browser v0.11.0，gost-dom/css v0.1.0 |
 | `go.sum` | 更新校验和 |
 
@@ -99,7 +109,7 @@ type Engine interface {
 | HTML 解析 | `browser.Open()` 双重获取 | HTTP 获取 → 剥离脚本 → `html.NewWindowReader` |
 | 脚本处理 | 在 `<script>` 标签上 panic | 通过 `x/net/html` 分词器预解析剥离 |
 | 点击安全性 | 无 panic 保护 | Click 方法中的 `defer recover()` |
-| 文本输出 | 原始 DOM 文本 | `normalizeWhitespace()` — 折叠空白运行 |
+| 文本输出 | 原始 DOM 文本 | `normalizeWhitespace()` — 折叠连续空白 |
 | 角色映射 | 基本（a, button, input 等） | 扩展：section→region, details→group, summary→button, dialog, article |
 | 交互检测 | 基本标签 | 添加 summary，ARIA 角色（tab, menuitem, switch） |
 | 路由 | 无（始终 lite） | 带有可插拔规则的策略模式路由器 |
@@ -110,7 +120,7 @@ type Engine interface {
 ### 引擎包测试（40+ 测试，全部通过）
 
 ```
-=== 单元测试 ===
+=== Unit Tests ===
 TestLiteEngine_Navigate          PASS
 TestLiteEngine_Snapshot_All      PASS
 TestLiteEngine_Snapshot_Interactive  PASS
@@ -126,7 +136,7 @@ TestLiteEngine_Capabilities      PASS
 TestLiteEngine_Name              PASS
 TestNormalizeWhitespace          PASS
 
-=== 路由器测试 ===
+=== Router Tests ===
 TestRouterChromeMode             PASS
 TestRouterLiteMode               PASS
 TestRouterAutoModeStaticContent  PASS
@@ -134,7 +144,7 @@ TestRouterAutoModeLiteNil        PASS
 TestRouterAddRemoveRule          PASS
 TestRouterRulesSnapshot          PASS
 
-=== 规则测试 ===
+=== Rule Tests ===
 TestCapabilityRule (9 cases)     PASS
 TestContentHintRule (9 cases)    PASS
 TestDefaultLiteRule (7 cases)    PASS
@@ -169,7 +179,7 @@ ok   cmd/pinchtab           2.8s
 ok   internal/allocation    2.0s
 ok   internal/config        1.6s
 ok   internal/dashboard     3.1s
-ok   internal/engine        1.4s   ← 新包
+ok   internal/engine        1.4s   ← new package
 ok   internal/handlers      6.8s
 ok   internal/human         10.7s
 ok   internal/idpi          2.0s

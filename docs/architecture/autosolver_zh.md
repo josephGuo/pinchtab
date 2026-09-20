@@ -1,20 +1,20 @@
-﻿# AutoSolver 架构
+﻿# AutoSolver
 
 ## 概述
 
-AutoSolver 系统为 Pinchtab 提供模块化、语义优先的浏览器自动化。它将现有的 `internal/solver` 框架（PR #395）演变为一个通用的自动化代理，能够处理 CAPTCHA、登录流程、注册流程、多步导航和入职序列。
+AutoSolver 系统为 PinchTab 提供模块化、语义优先的浏览器自动化。它脱胎于早期一个单用途的挑战求解框架，演变为一个通用的自动化代理，能够处理 CAPTCHA、登录流程、注册流程、多步导航和引导流程。
 
 ### 设计原则
 
-1. **隔离优先** — autosolver 模块 (`internal/autosolver/`) 与 chromedp 或桥接运行时零耦合。所有浏览器交互都通过 `Page` 和 `ActionExecutor` 接口进行。
+1. **隔离优先** — autosolver 模块（`internal/autosolver/`）与 chromedp 或桥接运行时零耦合。所有浏览器交互都通过 `Page` 和 `ActionExecutor` 接口进行。
 
-2. **语义优先** — `pinchtab/semantic` 包是主要的智能层。LLM 仅用作最后的后备方案。
+2. **语义优先** — `pinchtab/semantic` 包是主要的智能层。LLM 仅作为最后的后备方案使用。
 
 3. **可插拔架构** — 求解器通过 `Registry` 在运行时注册。外部求解器（Capsolver、2Captcha）是通过配置启用的可选插件。
 
-4. **行为 > 欺骗** — 求解器通过合法的浏览器操作（点击、输入）与页面交互，而不是 API 黑客或假令牌。
+4. **行为 > 欺骗** — 求解器通过合法的浏览器操作（点击、输入）与页面交互，而不是 API 取巧手段或假令牌。
 
-5. **超越 CAPTCHA 的可扩展性** — `IntentType` 系统支持登录、注册、入职和导航流程以及 CAPTCHA 求解。
+5. **超越 CAPTCHA 的可扩展性** — `IntentType` 系统除 CAPTCHA 求解外，还支持登录、注册、引导和导航流程。
 
 ---
 
@@ -27,8 +27,8 @@ AutoSolver 系统为 Pinchtab 提供模块化、语义优先的浏览器自动�
 │  ┌──────────┐    ┌──────────┐    ┌──────────────┐   │
 │  │ Registry │───▶│Core Loop │───▶│ Fallback     │   │
 │  │ (solvers)│    │(detect + │    │ Chain:       │   │
-│  └──────────┘    │ dispatch)│    │ built-in →   │   │
-│                  └────┬─────┘    │ semantic →   │   │
+│  └──────────┘    │ dispatch)│    │ semantic →   │   │
+│                  └────┬─────┘    │ rule-based → │   │
 │                       │          │ external →   │   │
 │                       ▼          │ LLM          │   │
 │              ┌────────────────┐  └──────────────┘   │
@@ -56,24 +56,28 @@ internal/autosolver/
 ├── interfaces.go          # Page, ActionExecutor, Solver, SemanticEngine, LLMProvider
 ├── types.go               # Result, Intent, Config, enums
 ├── autosolver.go          # Core orchestrator with fallback chain
+├── challenge_detection.go # Shared challenge classification (title/URL/HTML)
 ├── heuristics.go          # Title-based intent detection fallback
+├── keygated.go            # Solvers that register only once their API key is set
 ├── registry.go            # Instance-level solver registry with priority ordering
-├── autosolver_test.go     # Core loop tests (7 test cases)
-├── registry_test.go       # Registry tests (8 test cases)
 ├── adapters/
 │   └── pinchtab.go        # Bridge adapter (ONLY chromedp import)
+├── catalog/
+│   └── catalog.go         # Single owner of the names autoSolver.solvers accepts
 ├── semantic/
 │   └── adapter.go         # Wraps pinchtab/semantic ElementMatcher
 ├── external/
+│   ├── external.go        # Shared external-solver wrapper
 │   ├── capsolver.go       # Capsolver API skeleton
 │   └── twocaptcha.go      # 2Captcha API skeleton
 ├── llm/
-│   ├── llm.go             # LLM provider skeleton with structured prompts
-│   └── trim.go            # HTML trimming for token efficiency
+│   └── llm.go             # LLM provider skeleton with structured prompts
 └── solvers/
-    ├── cloudflare.go      # Cloudflare Turnstile (new interface, no chromedp)
-    └── legacy.go          # Compatibility shim for existing solver.Solver
+    ├── cloudflare.go      # Cloudflare Turnstile solver
+    └── jschallenge.go     # Generic JavaScript challenge/interstitial solver
 ```
+
+测试文件与每个文件并列放置（`*_test.go`）。供 LLM 提示使用的 HTML 裁剪位于共享的 `internal/htmltrim` 包中。
 
 ## 核心接口
 
@@ -86,6 +90,7 @@ type Page interface {
     URL() string
     Title() string
     HTML() (string, error)
+    HTMLWithin(timeout time.Duration) (string, error)
     Screenshot() ([]byte, error)
 }
 ```
@@ -127,33 +132,39 @@ type Solver interface {
 
 ## 后备链
 
-核心循环每次尝试执行以下链：
+意图在第一次尝试之前只检测一次；核心循环随后在每次尝试中执行本链的其余部分：
 
 ```
-1. 检测意图（语义引擎 → 标题启发式）
-2. 如果意图 = 正常 → 返回已解决
-3. 找到匹配的求解器（CanHandle = true，按优先级排序）
-4. 尝试每个求解器：
-   a. 内置（cloudflare，优先级 10）
-   b. 外部（capsolver 优先级 200，twocaptcha 优先级 210）
-5. 如果全部失败且启用 LLM：
-   a. 将 HTML 裁剪到 ~4KB
-   b. 使用尝试历史构建结构化提示
-   c. 执行 LLM 建议的操作
-6. 以指数退避重试（500ms → 10s 上限）
-7. 在 MaxAttempts 后停止（默认：8）
+1. Detect intent (semantic engine, or title heuristics when none is configured)
+2. If intent = normal → return solved
+3. Try semantic-first action planning (`/find` + self-healing)
+4. If still unresolved, find matching solvers (CanHandle = true)
+5. Execute solvers in configured order (`autoSolver.solvers`), falling back to
+    priority order when configuration does not match available solvers
+6. If all fail AND LLM enabled:
+   a. Trim HTML to ~4KB (`htmltrim.TrimHTML`, 4000-byte cap)
+   b. Build structured prompt with attempt history
+   c. Execute LLM-suggested action
+7. Retry with exponential backoff (500ms → 10s cap)
+8. Stop after MaxAttempts (default: 8)
 ```
 
 ## 配置
 
-### 配置文件 (`config.json`)
+### 配置文件（`config.json`）
 
 ```json
 {
   "autoSolver": {
     "enabled": true,
+    "autoTrigger": true,
+    "triggerOnNavigate": true,
+    "triggerOnAction": true,
     "maxAttempts": 8,
-    "solvers": ["cloudflare", "semantic", "capsolver", "twocaptcha"],
+    "solverTimeoutSec": 30,
+    "retryBaseDelayMs": 500,
+    "retryMaxDelayMs": 10000,
+    "solvers": ["cloudflare", "semantic"],
     "llmProvider": "openai",
     "llmFallback": false,
     "external": {
@@ -164,7 +175,7 @@ type Solver interface {
 }
 ```
 
-外部提供商 API 密钥仅在配置文件的 `autoSolver.external` 中配置。
+外部 provider 的 API 密钥仅在配置文件的 `autoSolver.external` 中配置。
 
 ## 扩展指南
 
@@ -200,7 +211,7 @@ as := autosolver.New(cfg, semanticEngine, nil)
 as.Registry().Register(&solvers.MySolver{})
 ```
 
-### 与 Pinchtab Bridge 一起使用
+### 与 PinchTab Bridge 一起使用
 
 ```go
 // Create Page + Executor from a bridge tab
@@ -218,7 +229,7 @@ if result.Solved {
 
 ## 与 browser-use 的比较
 
-| 方面 | browser-use | Pinchtab AutoSolver |
+| 方面 | browser-use | PinchTab AutoSolver |
 |--------|-------------|-------------------|
 | 决策引擎 | 每步 LLM | 语义优先，LLM 后备 |
 | DOM 处理 | 每步完整 DOM/截图 | 裁剪的 HTML，a11y 树 |
@@ -229,4 +240,4 @@ if result.Solved {
 
 ## 向后兼容性
 
-现有的 `internal/solver` 包（PR #395）**未修改**。`bridge/cloudflare.go` 中的 `CloudflareSolver` 继续按原样工作。`LegacyAdapter` 垫片 (`solvers/legacy.go`) 包装旧的 `solver.Solver` 实现，使其与新的 `autosolver.Solver` 接口一起工作。
+`internal/autosolver` 是唯一的求解器框架。前身包、`bridge/cloudflare.go` 中重复的 Cloudflare 求解器、以及本要在两者间搭桥的 `LegacyAdapter` 垫片，全部已删除：从来没有任何代码把该适配器接起来，因此第二个注册表没有读取者，而每一次求解器级的重构仍要去编辑它那份每个求解器的副本。

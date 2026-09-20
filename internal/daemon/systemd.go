@@ -28,7 +28,10 @@ func (m *systemdUserManager) Install(configPath string) (string, error) {
 	if err := os.MkdirAll(filepath.Dir(m.ServicePath()), 0755); err != nil {
 		return "", fmt.Errorf("create systemd user directory: %w", err)
 	}
-	if err := os.WriteFile(m.ServicePath(), []byte(renderSystemdUnit(m.env.execPath, configPath)), 0644); err != nil {
+	if err := ensureDaemonLogDir(m.env); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(m.ServicePath(), []byte(renderSystemdUnit(m.env.execPath, configPath, daemonStdoutLogPath(m.env), daemonStderrLogPath(m.env))), 0644); err != nil {
 		return "", fmt.Errorf("write systemd unit: %w", err)
 	}
 	if _, err := runCommand(m.runner, "systemctl", "--user", "daemon-reload"); err != nil {
@@ -41,6 +44,9 @@ func (m *systemdUserManager) Install(configPath string) (string, error) {
 }
 
 func (m *systemdUserManager) Start() (string, error) {
+	if err := ensureDaemonLogDir(m.env); err != nil {
+		return "", err
+	}
 	if _, err := runCommand(m.runner, "systemctl", "--user", "start", pinchtabDaemonUnitName); err != nil {
 		return "", err
 	}
@@ -48,6 +54,9 @@ func (m *systemdUserManager) Start() (string, error) {
 }
 
 func (m *systemdUserManager) Restart() (string, error) {
+	if err := ensureDaemonLogDir(m.env); err != nil {
+		return "", err
+	}
 	if _, err := runCommand(m.runner, "systemctl", "--user", "restart", pinchtabDaemonUnitName); err != nil {
 		return "", err
 	}
@@ -105,6 +114,11 @@ func (m *systemdUserManager) Pid() (string, error) {
 }
 
 func (m *systemdUserManager) Logs(n int) (string, error) {
+	logPath := daemonStderrLogPath(m.env)
+	if info, err := os.Stat(logPath); err == nil && info.Size() > 0 {
+		return runCommand(m.runner, "tail", "-n", fmt.Sprintf("%d", n), logPath)
+	}
+
 	return runCommand(m.runner, "journalctl", "--user", "-u", pinchtabDaemonUnitName, "-n", fmt.Sprintf("%d", n), "--no-pager")
 }
 
@@ -124,7 +138,18 @@ func (m *systemdUserManager) ManualInstructions() string {
 	return b.String()
 }
 
-func renderSystemdUnit(execPath, configPath string) string {
+// unitValue escapes a value for a systemd unit file. systemd expands "%" as a
+// specifier prefix (%h, %i, ...), so a literal percent in a path must be
+// doubled or the daemon starts against a mangled location.
+func unitValue(value string) string {
+	return strings.ReplaceAll(value, "%", "%%")
+}
+
+func renderSystemdUnit(execPath, configPath, stdoutPath, stderrPath string) string {
+	execPath = unitValue(execPath)
+	configPath = unitValue(configPath)
+	stdoutPath = unitValue(stdoutPath)
+	stderrPath = unitValue(stderrPath)
 	return fmt.Sprintf(`[Unit]
 Description=Pinchtab Browser Service
 After=network.target
@@ -133,10 +158,12 @@ After=network.target
 Type=simple
 ExecStart="%s" server
 Environment="PINCHTAB_CONFIG=%s"
+StandardOutput=append:%s
+StandardError=append:%s
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=default.target
-`, execPath, configPath)
+`, execPath, configPath, stdoutPath, stderrPath)
 }

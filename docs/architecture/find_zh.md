@@ -17,7 +17,9 @@
 
 ```text
 accessibility snapshot
+  -> DOM metadata enrichment
   -> element descriptors
+  -> IDPI scan of the candidate text (when enabled)
   -> lexical matcher
   -> embedding matcher
   -> combined score
@@ -27,14 +29,28 @@ accessibility snapshot
 
 ## 元素描述符
 
-每个可访问性节点都被转换为带有以下内容的描述符：
+每个可访问性节点都被转换为一个描述符，包含：
 
 - `ref`
 - `role`
 - `name`
 - `value`
+- `label`
+- `placeholder`
+- `alt`
+- `title`
+- `testid`
+- `text`
+- `tag`
+- `interactive`
+- `parent`
+- `section`
+- `documentIdx`
+- 位置提示：`depth`、`siblingIndex`、`siblingCount`、`labelledBy`
 
-这些字段也组合成一个用于匹配的复合字符串。
+PinchTab 负责从后端节点 id 中提取纯 DOM 元数据。对 `role:`、`text:`、`label:`、`placeholder:`、`alt:`、`title:`、`testid:`、`first:`、`last:` 和 `nth:` 这些形式的结构化定位符解析与匹配，被委托给外部的 `github.com/pinchtab/semantic` Go 模块（一个兄弟包，不属于本仓库）。仓库内的 `internal/autosolver/semantic/adapter.go` 只是一个薄适配器，把该模块接入 autosolver。
+
+CSS、XPath、refs、frame 作用域、把匹配到的 ref 转换回后端节点，以及现有的由 DOM 支撑的动作 `text:` 选择器，仍属于 PinchTab 的职责。
 
 ## 匹配器
 
@@ -49,17 +65,17 @@ PinchTab 当前使用由以下部分构建的组合匹配器：
 0.6 lexical + 0.4 embedding
 ```
 
-通过 `lexicalWeight` 和 `embeddingWeight` 可以进行每个请求的覆盖。
+通过 `lexicalWeight` 和 `embeddingWeight` 可以进行每次请求的覆盖。
 
 ## 词汇侧
 
-词汇匹配器专注于精确和近似精确的令牌重叠，包括角色感知的匹配行为。
+词汇匹配器专注于精确和近似精确的 token 重叠，包括角色感知的匹配行为。
 
 有用的特性：
 
 - 对精确单词表现强
 - 易于推理
-- 对 `submit button` 等明确查询的精度高
+- 对 `submit button` 等明确查询精度高
 
 ## 嵌入侧
 
@@ -73,15 +89,15 @@ PinchTab 当前使用由以下部分构建的组合匹配器：
 
 ## 组合匹配
 
-组合匹配器并发运行词汇和嵌入评分，按元素引用合并结果，并应用加权最终评分。
+组合匹配器并发运行词汇和嵌入评分，按元素 ref 合并结果，并应用加权最终评分。
 
-它在最终合并之前也使用较低的内部阈值，以便不会过早丢弃仅在一侧表现强的候选者。
+它在最终合并之前还使用一个较低的内部阈值，以便不会过早丢弃仅在一侧表现强的候选者。
 
 ## 快照依赖
 
-`find` 依赖于快照驱动交互使用的相同可访问性快照/引用缓存基础结构。
+`find` 依赖于快照驱动交互所使用的相同可访问性快照/ref 缓存基础结构。
 
-如果缺少缓存的快照，处理程序会尝试自动刷新它，然后再放弃。
+如果缺少缓存的快照，处理器会在放弃之前尝试自动刷新它。
 
 ## 意图缓存和恢复
 
@@ -91,11 +107,11 @@ PinchTab 当前使用由以下部分构建的组合匹配器：
 - 匹配的描述符
 - 评分/置信度元数据
 
-这允许恢复逻辑在后续操作因页面更新后旧引用变得过时而失败时尝试语义重新匹配。
+这使得恢复逻辑可以在后续操作因页面更新后旧 ref 变得过时而失败时，尝试一次语义重新匹配。
 
-## 编排器路由
+## 路由
 
-编排器暴露 `POST /tabs/{id}/find` 并将其代理到正确的运行实例。实际的匹配实现仍然在共享处理程序层中。
+`POST /tabs/{id}/find`（以及活动标签页的简写 `POST /find`）由 `internal/handlers/handlers.go` 中的共享处理器层注册。编排器通过其路由层把这些请求代理到正确的运行实例；它并不拥有该路由本身。
 
 ## 设计约束
 
@@ -105,7 +121,7 @@ PinchTab 当前使用由以下部分构建的组合匹配器：
 - 重量级模型依赖
 - 选择器优先耦合
 
-这使系统保持可移植性和快速性，但也意味着质量上限受限于进程内匹配器设计和可访问性快照的质量。
+这使系统保持可移植和快速，但也意味着质量上限受限于进程内匹配器设计和可访问性快照的质量。
 
 ## 性能
 

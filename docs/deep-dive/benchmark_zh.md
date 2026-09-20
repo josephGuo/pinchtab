@@ -16,7 +16,7 @@
 
 - **成本差距在更长范围内扩大**（Haiku 上从 9.5% → 19.6%）。点击→快照往返随着步数增加而复合。
 - **通道差距在扩展范围内大致与模型无关**（Haiku 19.6%，Sonnet 20.3%）。更强的模型不会通过推理绕过额外的往返。
-- **请求减少多于令牌减少多于成本减少**。agent-browser 的额外令牌大部分是 `cache_read`，价格为 $0.10/1M（Haiku）或 $0.30/1M（Sonnet）— 每个令牌便宜但数量很多。
+- **请求的降幅大于令牌的降幅，而令牌的降幅又大于成本的降幅。** agent-browser 的额外令牌大部分是 `cache_read`，价格为 $0.10/1M（Haiku）或 $0.30/1M（Sonnet）— 每个令牌便宜但数量很多。
 
 ## 测试如何进行
 
@@ -24,11 +24,11 @@
 
 ### 环境
 
-每次运行都在 Docker Compose（`tests/tools/docker-compose.yml`）中执行，包含三个服务：
+每次运行都在 Docker Compose（`tests/tools/docker-compose.yml`）中执行，外加一个主机侧运行器：
 
 - `fixtures` — 托管测试页面的基准 Web 服务器（`/`、`/wiki.html`、`/articles.html`、`/search.html`、`/form.html`、`/dashboard.html`、`/ecommerce.html`、`/spa.html`、`/login.html` 等）。
-- `pinchtab` 或 `agent-browser` — 正在测量的浏览器表面。PinchTab 由 `tests/tools/config/pinchtab-benchmark.json` 构建（IDPI `wrapContent=false`，以匹配 agent-browser 的未包装输出）。
-- `runner` — `tests/tools/runner/` 处的 Go 程序，驱动 LLM 代理循环。
+- `pinchtab` 或 `agent-browser` — 正在测量的浏览器表面。PinchTab 由 `tests/tools/config/pinchtab-benchmark.json` 配置（IDPI `wrapContent=false`，以匹配 agent-browser 的未包装输出）。
+- `runner` — `tests/tools/runner/` 处驱动 LLM 代理循环的 Go 程序。它不是 Compose 服务：`./dev bench` 在主机上用 `go run` 运行它，而通道包装器通过 `docker exec` 进入容器。
 
 ### 代理循环
 
@@ -56,7 +56,7 @@
 
 - **PinchTab 完整技能** = `skills/pinchtab/SKILL.md`（~14.5 KB）+ `skills/pinchtab/references/` 下的六个参考文件（api.md、commands.md、env.md、mcp.md、profiles.md、agent-optimization.md）总计 ~44 KB。完整大小 ≈ **58.5 KB**。
 - **基准测试中的 PinchTab** = 仅 `SKILL.md`（~14.5 KB）。参考子文件夹未内联。
-- **agent-browser 完整技能** 来自 `agent-browwser skills get agent-browser --full`。在基准测试中，运行器仅提取标题加上 `references/commands.md` 和 `references/snapshot-refs.md`，并丢弃其余部分（参见 `tests/tools/runner/prompt.go:DownloadAgentBrowserSkill`）。
+- **agent-browser 完整技能** 来自 `agent-browser skills get agent-browser --full`。在基准测试中，运行器仅提取标题加上 `references/commands.md` 和 `references/snapshot-refs.md`，并丢弃其余部分（参见 `tests/tools/runner/internal/bench/prompt.go:DownloadAgentBrowserSkill`）。
 
 在 10 步测试中，完整的参考捆绑包会在恰好提供更多参考内容的通道上主导 `cache_read` 令牌。让两个通道为代理在 10 步运行中从未查阅的内容付费，会放大编写更多文档的通道，而不是在实际任务中更高效的工具。将两者都修剪为 "标题 + 代理实际使用的一个参考文件" 隔离了工具表面比较。
 
@@ -64,7 +64,7 @@
 
 ## 结果：2026-04-20 运行（每个 n=5）
 
-所有十次运行在相同的 10 步集上都获得了 10/10 的通过率。Anthropic `claude-haiku-4-5-20251001`，`--max-turns 120`。
+所有十次运行在相同的 10 步集上都获得了 10/10 的通过率。Anthropic `claude-haiku-4-5-20251001`，`--max-turns 100`（la1: 120）。
 
 ### 每次运行的原始总数
 
@@ -149,7 +149,7 @@
 
 ### 可靠性
 
-两个通道通过了 72 次总验证，除了每个通道各有一个步骤（lpe1: 23/24，lae1: 22/23）— 相同的错误率约为每 24 步错过 1 步。两者都保持在 90 年代中期的范围内。
+两个通道通过了 72 次总验证，除了每个通道各有一个步骤（lpe1: 23/24，lae1: 22/23）— 相同的错误率约为每 24 步错过 1 步。两者的通过率都维持在 95% 上下的范围内。
 
 ### 差距如何随工作负载扩展
 
@@ -167,13 +167,13 @@
 
 ### 结论
 
-扩展范围运行强化了基本范围的故事，但规模更大：在生产现实的工作负载下，PinchTab 明显更便宜（约五分之一更少）并且使用显著更少的 API 往返（约 31% 更少）。基本套件的 9.5% 数字低估了规模上的差距。
+扩展范围运行强化了基本范围的结论，但规模更大：在生产现实的工作负载下，PinchTab 明显更便宜（约五分之一更少）并且使用显著更少的 API 往返（约 31% 更少）。基本套件的 9.5% 数字低估了规模上的差距。
 
-对于标题引用：使用基本数字作为最小噪声的苹果对苹果锚点（紧凑组，高重复计数），并在谈论现实工作负载大小的成本时引用扩展数字。
+引用主打数字时：使用基本数字作为噪声最小的同口径基准（分组紧凑、重复计数高），而在谈论真实工作负载规模的成本时引用扩展数字。
 
 ## Sonnet 4.6：扩展范围（每个 n=2，24 步）
 
-为了检查工具表面差距是否 **模型无关** — 即更强的模型是否通过在 agent-browser 的点击→快照模式上使用更少的轮次来缩小差距？— 我们使用 `claude-sonnet-4-6` 重新运行了 24 步扩展范围，每个通道 n=2。每个通道两次运行太少，无法获得自信的标题，但足以发现通道之间的比率是否与 Haiku 相比发生变化。日志前缀 `lae-sonnet46-*`（agent-browser）和 `lpe-sonnet46-*`（PinchTab）。
+为了检查工具表面差距是否 **模型无关** — 即更强的模型是否通过在 agent-browser 的点击→快照模式上使用更少的轮次来缩小差距？— 我们使用 `claude-sonnet-4-6` 重新运行了 24 步扩展范围，每个通道 n=2。每个通道两次运行太少，不足以给出可自信引用的头条数字，但足以发现通道之间的比率与 Haiku 相比是否发生变化。日志前缀 `lae-sonnet46-*`（agent-browser）和 `lpe-sonnet46-*`（PinchTab）。
 
 ### 每次运行的原始总数
 
@@ -217,7 +217,7 @@ PinchTab 的 **~20% 成本优势在两种模型的扩展范围内基本相同**�
 - **Sonnet 在两个通道上使用的请求略少于 Haiku**（lpe 87.5 vs 92.3，lae 124.0 vs 134.0）— 更强模型的 ~5–7% 轮次减少。令牌总数类似下降（~9–10%）。对比较影响不大。
 - **Sonnet 在相同工作负载上的成本约为 Haiku 的 2.5 倍**（lpe $0.89 vs $0.35；lae $1.12 vs $0.44），这与 ~3× 价格比因轮次减少而略有折扣一致。
 
-两次运行很薄弱 — n=2 具有非常宽的置信区间，我们看到 lpe 上 ~7% 的通道内差异和 lae 上 ~6% 的差异，因此不要对 20.3% 数字读取精度。方向故事（优势在模型变化中存活）是承载结果。
+两次运行过于单薄 — n=2 的置信区间非常宽，我们看到 lpe 的通道内差异约 7%、lae 约 6%，因此不要把 20.3% 当作精确值。真正站得住脚的是方向性结论（该优势在模型变化后依然存在）。
 
 ## 公平性警告
 
@@ -225,7 +225,7 @@ PinchTab 的 **~20% 成本优势在两种模型的扩展范围内基本相同**�
 
 10 步任务集是在 PinchTab 开发过程中设计的。在 agent-browser 中笨拙或多调用的步骤 — 那些需要在点击 / 填充 / 提交 / 后退 / 动态内容交互后显式动作后快照的步骤 — 构成了组 1 的大部分和组 2–5 的全部。
 
-更强的未来比较将与两个团队共同设计任务集，或运行更大的任务集（完整的 39 组基准测试位于 `tests/benchmark/` 中），以便每个任务的特殊偏差平均化。
+更强的未来比较将与两个团队共同设计任务集，或运行大得多的任务集（仓库内的基准测试组位于 `tests/benchmark/`——今天是 `group-00.md` 到 `group-05.md`，仍有扩展空间），以便每个任务的特殊偏差平均化。
 
 ### 2. 部分技能配置
 
@@ -257,23 +257,23 @@ PinchTab 的 **~20% 成本优势在两种模型的扩展范围内基本相同**�
 
 ### 步骤结束折叠
 
-每个完成的步骤过去需要两个簿记轮次：一个记录答案，一个根据预言机验证它。这些被折叠成单个 `./scripts/runner step-end` 调用。上面的 n=5 运行确认两个通道都 10/10 采用；与早期基线相比，这 alone 为每个 PinchTab 运行节省约 10 轮，为每个 agent-browser 运行节省约 13 轮。
+每个完成的步骤过去需要两个簿记轮次：一个记录答案，一个根据预言机验证它。这些被折叠成单个 `./scripts/runner step-end` 调用。上面的 n=5 运行确认两个通道都 10/10 采用；与早期基线相比，仅此一项就为每次 PinchTab 运行节省约 10 轮，为每次 agent-browser 运行节省约 13 轮。
 
 ## 重现此基准
 
 ```bash
-# 从仓库根目录：
+# From repo root:
 
-# 1. 基线通道（确定性，~30 秒）
+# 1. Baseline lane (deterministic, ~30 seconds)
 ./dev opt baseline
 
-# 2. PinchTab 通道（需要 Anthropic 密钥）
+# 2. PinchTab lane (requires Anthropic key)
 ANTHROPIC_API_KEY=... ./dev bench pinchtab --groups 0,1
 
-# 3. agent-browser 通道（需要 Anthropic 密钥）
+# 3. agent-browser lane (requires Anthropic key)
 ANTHROPIC_API_KEY=... ./dev bench agent-browser --groups 0,1
 
-# 4. 检查运行级使用情况
+# 4. Inspect run-level usage
 jq '.run_usage' tests/benchmark/results/pinchtab_benchmark_*.json
 jq '.run_usage' tests/benchmark/results/agent_browser_benchmark_*.json
 ```
@@ -332,11 +332,11 @@ jq '.run_usage' tests/benchmark/results/agent_browser_benchmark_*.json
 - 基本范围：每个通道 n=5；扩展范围：每个通道 n=3。运行间方差仍然是均值的 ~25–30%；agent-browser 在每个范围都有一个异常值
 - 测试了两个模型（Haiku 4.5 在 n=5 基本 / n=3 扩展；Sonnet 4.6 在 n=2 扩展）。无 Opus 比较。Sonnet n=2 不足以单独对其数字进行严格的置信区间，仅用于通道比率观察
 - 固定 Docker 环境为每个调用添加大致相等的开销，但绝对时间不代表生产
-- 分数是通过计数，不是答案质量或完成时间
+- 分数是步骤通过数，而不是答案质量或完成时间
 
 ## 未来工作
 
-- 修复 `tests/tools/runner/recordstep.go` 中的两个测量错误（pinchtab 工具调用，缓存创建丢弃）
+- 修复 `tests/tools/runner/internal/bench/recordstep.go` 中的两个测量错误（pinchtab 工具调用，缓存创建丢弃）
 - 扩展范围内每个通道 10+ 次运行，以收紧置信区间并描述 agent-browser 异常值率
 - 模型比较（Haiku vs Sonnet vs Opus）
 - 全技能（非部分技能）重新运行，进行生产现实比较

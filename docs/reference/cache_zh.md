@@ -1,42 +1,42 @@
 ﻿# 缓存
 
-清除浏览器的HTTP磁盘缓存。
+清除浏览器的 HTTP 磁盘缓存。
 
 ## 清除缓存
 
 ```bash
 curl -X POST http://localhost:9867/cache/clear
-# 响应
+# Response
 {
   "status": "cleared"
 }
 
-# 命令行界面 替代方案（默认人类可读）
+# CLI Alternative (human-readable by default)
 pinchtab cache clear
-# 输出: OK
+# Output: OK
 
-pinchtab cache clear --json              # 完整 JSON 响应
+pinchtab cache clear --json              # Full JSON response
 ```
 
 ## 检查状态
 
 ```bash
 curl http://localhost:9867/cache/status
-# 响应
+# Response
 {
   "canClear": true
 }
 
-# 命令行界面 替代方案（默认人类可读）
+# CLI Alternative (human-readable by default)
 pinchtab cache status
-# 输出: can-clear (或 cache-empty)
+# Output: can-clear (or cache-empty)
 
-pinchtab cache status --json             # 完整 JSON 响应
+pinchtab cache status --json             # Full JSON response
 ```
 
 ## 注意事项
 
-- 清除所有来源的HTTP磁盘缓存
+- 清除所有来源的 HTTP 磁盘缓存
 - 不影响 cookies、localStorage 或 sessionStorage
 - 在应用重新部署后使用，确保获取新鲜的 JS/CSS 捆绑包
 - 可以在没有活动标签页的情况下调用

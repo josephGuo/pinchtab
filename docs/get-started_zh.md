@@ -36,13 +36,13 @@ pinchtab --version
 **要求：** Docker
 
 ```bash
-docker run -d -p 127.0.0.1:9867:9867 pinchtab/pinchtab
-curl http://localhost:9867/health
+docker run -d --name pinchtab -p 127.0.0.1:9867:9867 pinchtab/pinchtab
+docker exec pinchtab pinchtab health
 ```
 
 ### 选项 4：从源代码构建
 
-**要求：** Go 1.25+、Git、Chrome/Chromium
+**要求：** Go 1.26+、Git、Chrome/Chromium
 
 ```bash
 git clone https://github.com/pinchtab/pinchtab.git
@@ -52,7 +52,11 @@ go build -o pinchtab ./cmd/pinchtab
 ./pinchtab --version
 ```
 
-**[完整构建指南 ->](architecture/building.md)**
+**[完整构建与贡献指南 ->](guides/contributing.md)**
+
+> **macOS 升级提示：** 当前 PinchTab 使用 `~/.pinchtab/config.json` 作为默认配置路径。如果你在
+> `~/Library/Application Support/pinchtab/config.json` 仍留有较旧的配置，请把它移动或合并到
+> `~/.pinchtab/config.json`。
 
 ## 平台支持
 
@@ -65,13 +69,13 @@ Windows 二进制文件可用，但 Windows 支持目前有限且尽力而为，
 安装后，您可以从 命令行界面 生成 shell 自动完成：
 
 ```bash
-# 生成并安装 zsh 自动完成
+# Generate and install zsh completions
 pinchtab completion zsh > "${fpath[1]}/_pinchtab"
 
-# 生成 bash 自动完成
+# Generate bash completions
 pinchtab completion bash > /etc/bash_completion.d/pinchtab
 
-# 生成 fish 自动完成
+# Generate fish completions
 pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
 ```
 
@@ -90,27 +94,34 @@ pinchtab completion fish > ~/.config/fish/completions/pinchtab.fish
 
 ```bash
 pinchtab server
-# 响应
-🦀 PinchTab port=9867
-dashboard ready url=http://localhost:9867
+# Response (log lines)
+time=... level=INFO msg=orchestration strategy=always-on allocation=fcfs
+time=... level=INFO msg="dashboard started" port=9867
 ```
 
 服务器运行在 `http://127.0.0.1:9867`。
 您可以在 `http://127.0.0.1:9867` 或 `http://127.0.0.1:9867/dashboard` 打开仪表板。
 
+HTTP API 需要服务器 token（`server.token`，首次运行时生成）。为下面的 `curl` 示例导出一次：
+
+```bash
+export PINCHTAB_TOKEN=$(pinchtab config token --stdout)
+```
+
 ### 步骤 2：启动您的第一个实例
 
 ```bash
 curl -s -X POST http://127.0.0.1:9867/instances/start \
+  -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
-  "profileName": "instance-1741400000000000000",
+  "profileName": "instance-1741400000000000000-9f3c2a1b",
   "port": "9868",
   "mode": "headless",
   "headless": true,
@@ -122,11 +133,12 @@ pinchtab instance start
 
 ```bash
 curl -s -X POST http://127.0.0.1:9867/navigate \
+  -H "Authorization: Bearer $PINCHTAB_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://github.com/pinchtab/pinchtab"}' | jq .
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab nav https://github.com/pinchtab/pinchtab
-# 响应
+# Response
 {
   "tabId": "CDP_TARGET_ID",
   "title": "GitHub - pinchtab/pinchtab",
@@ -137,10 +149,10 @@ pinchtab nav https://github.com/pinchtab/pinchtab
 ### 步骤 4：检查页面
 
 ```bash
-curl -s "http://127.0.0.1:9867/snapshot?filter=interactive" | jq .
-# 命令行界面 替代方案
+curl -s -H "Authorization: Bearer $PINCHTAB_TOKEN" "http://127.0.0.1:9867/snapshot?filter=interactive" | jq .
+# CLI Alternative
 pinchtab snap -i -c
-# 响应
+# Response
 {
   "nodes": [
     { "ref": "e0", "role": "link", "name": "Skip to content" },
@@ -158,7 +170,7 @@ pinchtab snap -i -c
 ### 连接被拒绝
 
 ```bash
-curl http://localhost:9867/health
+pinchtab health
 ```
 
 如果失败，启动服务器：
@@ -183,7 +195,7 @@ brew install chromium
 # Linux (Ubuntu/Debian)
 sudo apt install chromium-browser
 
-# 自定义 Chrome 二进制文件（在配置中设置）
+# Custom Chrome binary (set in config)
 pinchtab config set browser.binary /path/to/chrome
 ```
 

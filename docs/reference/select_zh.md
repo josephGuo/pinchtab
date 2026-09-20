@@ -6,9 +6,9 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"select","ref":"e12","value":"it"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab select e12 it
-# 响应（使用 --json 获取完整 JSON）
+# Response (use --json for full JSON)
 OK
 ```
 
@@ -31,7 +31,7 @@ OK
 3. 不区分大小写的可见文本
 4. 不区分大小写的可见文本子字符串
 
-所有这些都可以根据页面工作：
+具体哪条策略有效取决于页面：
 
 ```bash
 pinchtab select e12 uk
@@ -42,10 +42,12 @@ pinchtab select e12 "Kingdom"
 
 当需要消除歧义时，首选规范选项值或完整可见文本。
 
-选择器查找仅限于当前框架范围（默认：`main`）。在 iframe 选择前使用 [`/frame`](./frame.md)。
+API 读取 `value`，回退到 `text`。无任何匹配时，该动作应答 `422 option_not_found`；`details.available` 以 `{value, text}` 列出各选项，`details.hint` 将其渲染。
+
+selector 查找限于当前 frame 范围（默认 `main`）。在 iframe 选择前使用 [`/frame`](./frame.md)。
 
 ## 相关页面
 
-- [框架](./frame.md)
-- [快照](./snapshot.md)
-- [聚焦](./focus.md)
+- [Frame](./frame.md)
+- [Snapshot](./snapshot.md)
+- [Focus](./focus.md)

@@ -1,148 +1,197 @@
 package orchestrator
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
-
-	"github.com/pinchtab/pinchtab/internal/activity"
-	"github.com/pinchtab/pinchtab/internal/config"
 )
 
 const (
-	instanceHealthPollInterval       = 500 * time.Millisecond
-	instanceStartupTimeout           = 45 * time.Second
-	attachedBridgeHealthPollInterval = 60 * time.Second
-	orchestratorActivitySource       = "orchestrator"
+	instanceHealthPollInterval = 500 * time.Millisecond
+	instanceStartupTimeout     = 45 * time.Second
 )
 
-type healthProbePolicy int
+type startupProbe struct {
+	healthy     bool
+	exitedEarly bool
+	waitErr     error
+	resolvedURL string
+	lastProbe   string
+	waitCh      chan error
+}
 
-const (
-	healthProbePolicyLoopback healthProbePolicy = iota
-	healthProbePolicyAttachAllowlist
-)
+// startMonitor runs monitor for inst and registers it with o.monitors, so
+// Shutdown can wait for it. Every monitor must start this way; a bare
+// `go o.monitor(inst)` is a goroutine that outlives its orchestrator.
+func (o *Orchestrator) startMonitor(inst *InstanceInternal) {
+	o.monitors.Add(1)
+	go func() {
+		defer o.monitors.Done()
+		o.monitor(inst)
+	}()
+}
+
+// shuttingDown reports whether Shutdown has been called. Safe on an
+// Orchestrator built without the constructor: a nil channel is never ready.
+func (o *Orchestrator) shuttingDown() bool {
+	select {
+	case <-o.shutdownCh:
+		return true
+	default:
+		return false
+	}
+}
+
+// sleepOrShutdown waits for d, or returns early once Shutdown is called. It
+// replaces a bare time.Sleep in the probe loop so a shutdown does not have to
+// wait out a poll interval per instance.
+func (o *Orchestrator) sleepOrShutdown(d time.Duration) {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-o.shutdownCh:
+	}
+}
 
 func (o *Orchestrator) monitor(inst *InstanceInternal) {
-	healthy := false
-	exitedEarly := false
-	lastProbe := "no response"
-	resolvedURL := ""
+	p := o.probeStartupHealth(inst)
+	o.applyStartupOutcome(inst, p)
+	o.finalizeInstanceExit(inst, p)
+}
+
+func (o *Orchestrator) probeStartupHealth(inst *InstanceInternal) startupProbe {
 	waitCh := make(chan error, 1)
 	go func() {
 		waitCh <- inst.cmd.Wait()
 	}()
-	var waitErr error
+	p := startupProbe{lastProbe: "no response", waitCh: waitCh}
 	started := time.Now()
 	probePort, portErr := parsePortNumber(inst.Port)
 	if portErr != nil {
-		lastProbe = portErr.Error()
+		p.lastProbe = portErr.Error()
 	}
 	for time.Since(started) < instanceStartupTimeout {
 		select {
-		case waitErr = <-waitCh:
-			exitedEarly = true
+		case p.waitErr = <-waitCh:
+			p.exitedEarly = true
 		default:
 		}
-		if exitedEarly {
+		if p.exitedEarly {
 			break
 		}
 		if portErr != nil {
 			break
 		}
-		time.Sleep(instanceHealthPollInterval)
+		// Stop probing a starting instance once the orchestrator is going down;
+		// applyStartupOutcome below leaves a stopping/stopped instance alone, so
+		// bailing here loses nothing.
+		if o.shuttingDown() {
+			p.lastProbe = "orchestrator shutting down"
+			break
+		}
+		o.sleepOrShutdown(instanceHealthPollInterval)
+		if o.shuttingDown() {
+			p.lastProbe = "orchestrator shutting down"
+			break
+		}
 
-		// monitor only probes child bridge processes started by Launch.
-		// Attached remote bridges are validated and probed during attach.
-		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.runtimeCfg), probePort) {
+		for _, baseURL := range instanceBaseURLs(configuredChildBind(o.cfg()), probePort) {
 			targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", healthProbePolicyLoopback)
 			if err != nil {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
+				p.lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
 				continue
 			}
-			req, reqErr := http.NewRequest(http.MethodGet, healthProbeURL(targetBaseURL), nil)
-			if reqErr != nil {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
-				continue
-			}
-			tagOrchestratorMonitoringRequest(req)
-			o.applyInstanceAuth(req, inst)
-			resp, err := o.client.Do(req)
-			if err == nil {
-				_ = resp.Body.Close()
-				lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
-				if isInstanceHealthyStatus(resp.StatusCode) {
-					healthy = true
-					resolvedURL = baseURL
-					break
-				}
-			} else {
-				lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
+			ready, probe := o.probeChildInstanceReady(inst, targetBaseURL)
+			p.lastProbe = fmt.Sprintf("%s -> %s", baseURL, probe)
+			if ready {
+				p.healthy = true
+				p.resolvedURL = baseURL
+				break
 			}
 		}
-		if healthy {
+		if p.healthy {
 			break
 		}
 	}
+	return p
+}
 
+func (o *Orchestrator) applyStartupOutcome(inst *InstanceInternal, p startupProbe) {
 	o.mu.Lock()
 	var eventType string
 	switch inst.Status {
 	case "stopping", "stopped":
 	default:
-		if healthy {
+		if p.healthy {
 			inst.Status = "running"
-			if resolvedURL != "" {
-				inst.URL = resolvedURL
-				inst.Instance.URL = resolvedURL
+			if p.resolvedURL != "" {
+				inst.URL = p.resolvedURL
+				inst.Instance.URL = p.resolvedURL
 			}
-			o.syncInstanceToManager(&inst.Instance)
 			eventType = "instance.started"
 			slog.Info("instance ready", "id", inst.ID, "port", inst.Port)
-		} else if exitedEarly {
+		} else if p.exitedEarly {
 			inst.Status = "error"
-			if waitErr != nil {
-				inst.Error = "process exited before health check: " + waitErr.Error()
+			if p.waitErr != nil {
+				inst.Error = "process exited before health check: " + p.waitErr.Error()
 			} else {
 				inst.Error = "process exited before health check succeeded"
 			}
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			inst.lastFailureReason = ClassifyLaunchFailure(errors.New(inst.Error))
 			eventType = "instance.error"
-			slog.Error("instance exited before ready", "id", inst.ID)
+			slog.Error("instance exited before ready", "id", inst.ID, "reason", string(inst.lastFailureReason))
 		} else {
 			inst.Status = "error"
-			inst.Error = fmt.Errorf("health check timeout after %s (%s)", instanceStartupTimeout, lastProbe).Error()
+			inst.Error = fmt.Errorf("health check timeout after %s (%s)", instanceStartupTimeout, p.lastProbe).Error()
 			if tail := tailLogLine(inst.logBuf.String()); tail != "" {
 				inst.Error += " | " + tail
 			}
+			inst.lastFailureReason = ClassifyLaunchFailure(errors.New(inst.Error))
 			eventType = "instance.error"
-			slog.Error("instance failed to start", "id", inst.ID)
+			slog.Error("instance failed to start", "id", inst.ID, "reason", string(inst.lastFailureReason))
 		}
 	}
+	// The repository holds a snapshot, so every status transition must re-sync;
+	// error and timeout outcomes used to reach it only by sharing this struct.
+	o.syncInstanceToManager(&inst.Instance)
 	instCopy := inst.Instance
 	o.mu.Unlock()
 	if eventType != "" {
 		o.emitEvent(eventType, &instCopy)
 	}
+}
 
-	if !exitedEarly {
-		<-waitCh
+func (o *Orchestrator) finalizeInstanceExit(inst *InstanceInternal, p startupProbe) {
+	if !p.exitedEarly {
+		// Interruptible: this waits for the child process to report exit, which
+		// for a process that never exits is forever. Shutdown waits on the
+		// monitors, so a bare receive here makes shutdown unbounded. Stop has
+		// already signalled the process by the time shutdownCh closes; the state
+		// transition below still runs.
+		select {
+		case <-p.waitCh:
+		case <-o.shutdownCh:
+		}
 	}
 	o.mu.Lock()
 	wasStopped := false
 	if inst.Status == "running" || inst.Status == "stopping" {
 		inst.Status = "stopped"
 		wasStopped = true
+		o.syncInstanceToManager(&inst.Instance)
 	}
-	instCopy = inst.Instance
+	instCopy := inst.Instance
 	o.mu.Unlock()
 	if wasStopped {
 		o.emitEvent("instance.stopped", &instCopy)
@@ -150,284 +199,93 @@ func (o *Orchestrator) monitor(inst *InstanceInternal) {
 	slog.Info("instance exited", "id", inst.ID)
 }
 
-func (o *Orchestrator) monitorAttachedBridge(inst *InstanceInternal) {
-	ticker := time.NewTicker(attachedBridgeHealthPollInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if !o.checkAttachedBridgeHealth(inst) {
-			return
-		}
-	}
-}
-
-func (o *Orchestrator) checkAttachedBridgeHealth(inst *InstanceInternal) bool {
-	o.mu.RLock()
-	current, ok := o.instances[inst.ID]
-	shouldStop := !ok || current != inst || inst.Status != "running" || !inst.Attached || inst.AttachType != "bridge"
-	o.mu.RUnlock()
-	if shouldStop {
-		return false
-	}
-
-	healthy, resolvedURL, lastProbe := o.probeInstanceHealth(inst)
-	if healthy {
-		if resolvedURL != "" && resolvedURL != inst.URL {
-			o.mu.Lock()
-			if current, ok := o.instances[inst.ID]; ok && current == inst {
-				inst.URL = resolvedURL
-				inst.Instance.URL = resolvedURL
-				o.syncInstanceToManager(&inst.Instance)
-			}
-			o.mu.Unlock()
-		}
-		return true
-	}
-
-	slog.Warn("attached bridge unreachable, removing", "id", inst.ID, "probe", lastProbe)
-	o.markStopped(inst.ID)
-	return false
-}
-
-func (o *Orchestrator) probeInstanceHealth(inst *InstanceInternal) (bool, string, string) {
-	lastProbe := "no response"
-	var baseURLs []string
-	if inst.URL != "" {
-		baseURLs = []string{strings.TrimRight(inst.URL, "/")}
-	} else {
-		probePort, err := parsePortNumber(inst.Port)
-		if err != nil {
-			return false, "", err.Error()
-		}
-		baseURLs = instanceBaseURLs("", probePort)
-	}
-
-	policy := healthProbePolicyLoopback
-	if inst.Attached && inst.AttachType == "bridge" {
-		policy = healthProbePolicyAttachAllowlist
-	}
-
-	for _, baseURL := range baseURLs {
-		targetBaseURL, err := o.validatedHealthProbeBaseURL(baseURL, "", policy)
-		if err != nil {
-			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
-			continue
-		}
-		req, reqErr := http.NewRequest(http.MethodGet, healthProbeURL(targetBaseURL), nil)
-		if reqErr != nil {
-			lastProbe = fmt.Sprintf("%s -> %s", baseURL, reqErr.Error())
-			continue
-		}
-		tagOrchestratorMonitoringRequest(req)
-		o.applyInstanceAuth(req, inst)
-		resp, err := o.client.Do(req)
-		if err != nil {
-			lastProbe = fmt.Sprintf("%s -> %s", baseURL, err.Error())
-			continue
-		}
-		_ = resp.Body.Close()
-		lastProbe = fmt.Sprintf("%s -> HTTP %d", baseURL, resp.StatusCode)
-		if isInstanceHealthyStatus(resp.StatusCode) {
-			return true, baseURL, lastProbe
-		}
-	}
-	return false, "", lastProbe
-}
-
-type remoteTab struct {
-	ID    string `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
-}
-
-type remoteMetrics struct {
-	Memory *memoryMetrics `json:"memory,omitempty"`
-}
-
-type memoryMetrics struct {
-	JSHeapUsedMB  float64 `json:"jsHeapUsedMB"`
-	JSHeapTotalMB float64 `json:"jsHeapTotalMB"`
-	Documents     int64   `json:"documents"`
-	Frames        int64   `json:"frames"`
-	Nodes         int64   `json:"nodes"`
-	Listeners     int64   `json:"listeners"`
-}
-
-func (o *Orchestrator) fetchTabs(inst *InstanceInternal) ([]remoteTab, error) {
-	target, err := o.instancePathURL(inst, "/tabs", "")
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
-	if err != nil {
-		return nil, err
+func (o *Orchestrator) probeChildInstanceReady(inst *InstanceInternal, baseURL *url.URL) (bool, string) {
+	req, reqErr := http.NewRequest(http.MethodGet, healthProbeURL(baseURL), nil)
+	if reqErr != nil {
+		return false, reqErr.Error()
 	}
 	tagOrchestratorMonitoringRequest(req)
 	o.applyInstanceAuth(req, inst)
-
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return nil, err
+		return false, err.Error()
 	}
-	defer func() { _ = resp.Body.Close() }()
+	_ = resp.Body.Close()
+	if !isInstanceHealthyStatus(resp.StatusCode) {
+		return false, fmt.Sprintf("health HTTP %d", resp.StatusCode)
+	}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch tabs: status %d", resp.StatusCode)
+	tabID, err := o.warmInstanceTabLifecycle(inst, baseURL)
+	if err != nil {
+		if tabID != "" {
+			slog.Debug("instance startup warmup left tab open", "id", inst.ID, "tabId", tabID, "err", err)
+		}
+		return false, fmt.Sprintf("warmup failed: %v", err)
+	}
+	return true, "ready"
+}
+
+func (o *Orchestrator) warmInstanceTabLifecycle(inst *InstanceInternal, baseURL *url.URL) (string, error) {
+	payload := []byte(`{"action":"new","url":"about:blank"}`)
+	tabURL := *baseURL
+	tabURL.Path = "/tab"
+	createReq, err := http.NewRequest(http.MethodPost, tabURL.String(), bytes.NewReader(payload))
+	if err != nil {
+		return "", err
+	}
+	createReq.Header.Set("Content-Type", "application/json")
+	tagOrchestratorMonitoringRequest(createReq)
+	o.applyInstanceAuth(createReq, inst)
+
+	createResp, err := o.client.Do(createReq)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = createResp.Body.Close() }()
+
+	body, readErr := io.ReadAll(createResp.Body)
+	if readErr != nil {
+		return "", fmt.Errorf("read create-tab response: %w", readErr)
+	}
+	if createResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("create tab HTTP %d: %s", createResp.StatusCode, compactBody(body))
 	}
 
 	var result struct {
-		Tabs []remoteTab `json:"tabs"`
+		TabID string `json:"tabId"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("decode create-tab response: %w", err)
 	}
-	return result.Tabs, nil
-}
+	if strings.TrimSpace(result.TabID) == "" {
+		return "", fmt.Errorf("create-tab response missing tabId")
+	}
 
-func (o *Orchestrator) fetchMetrics(inst *InstanceInternal) (*memoryMetrics, error) {
-	target, err := o.instancePathURL(inst, "/metrics", "")
+	closePayload, err := json.Marshal(map[string]string{"tabId": result.TabID})
 	if err != nil {
-		return nil, err
+		return result.TabID, err
 	}
-	req, err := http.NewRequest(http.MethodGet, target.String(), nil)
+	closeURL := *baseURL
+	closeURL.Path = "/close"
+	closeReq, err := http.NewRequest(http.MethodPost, closeURL.String(), bytes.NewReader(closePayload))
 	if err != nil {
-		return nil, err
+		return result.TabID, err
 	}
-	tagOrchestratorMonitoringRequest(req)
-	o.applyInstanceAuth(req, inst)
+	closeReq.Header.Set("Content-Type", "application/json")
+	tagOrchestratorMonitoringRequest(closeReq)
+	o.applyInstanceAuth(closeReq, inst)
 
-	resp, err := o.client.Do(req)
+	closeResp, err := o.client.Do(closeReq)
 	if err != nil {
-		return nil, err
+		return result.TabID, fmt.Errorf("close warmup tab: %w", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != 200 {
-		return nil, nil
+	defer func() { _ = closeResp.Body.Close() }()
+	closeBody, readErr := io.ReadAll(closeResp.Body)
+	if readErr != nil {
+		return result.TabID, fmt.Errorf("read close-tab response: %w", readErr)
 	}
-
-	var result remoteMetrics
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
+	if closeResp.StatusCode != http.StatusOK {
+		return result.TabID, fmt.Errorf("close warmup tab HTTP %d: %s", closeResp.StatusCode, compactBody(closeBody))
 	}
-	return result.Memory, nil
-}
-
-func tagOrchestratorMonitoringRequest(req *http.Request) {
-	if req == nil {
-		return
-	}
-	req.Header.Set(activity.HeaderPTSource, orchestratorActivitySource)
-}
-
-func isInstanceHealthyStatus(code int) bool {
-	return code > 0 && code < http.StatusInternalServerError
-}
-
-func (o *Orchestrator) validatedHealthProbeBaseURL(rawURL, port string, policy healthProbePolicy) (*url.URL, error) {
-	baseURL, err := o.parseHTTPInstanceURL(rawURL, port)
-	if err != nil {
-		return nil, err
-	}
-
-	host := baseURL.Hostname()
-	switch policy {
-	case healthProbePolicyAttachAllowlist:
-		if o.runtimeCfg == nil {
-			return nil, fmt.Errorf("blocked: attach not configured")
-		}
-		if !isAllowedAttachHost(host, o.runtimeCfg.AttachAllowHosts) {
-			slog.Warn("health probe blocked: host not allowed", "url", rawURL, "host", host)
-			return nil, fmt.Errorf("blocked: host not allowed")
-		}
-	default:
-		if !isAllowedChildProbeHost(host, configuredChildBind(o.runtimeCfg)) {
-			slog.Warn("health probe blocked: non-loopback host", "url", rawURL, "host", host)
-			return nil, fmt.Errorf("blocked: non-loopback host")
-		}
-	}
-
-	// Reconstruct from validated components to break the CodeQL taint chain
-	// from the user-controlled rawURL to the outgoing HTTP request.
-	return sanitizedBaseURL(baseURL.Scheme, baseURL.Host), nil
-}
-
-// sanitizedBaseURL builds a fresh url.URL from individually validated scheme
-// and host strings. This intentionally severs any data-flow link to the
-// original user-supplied URL so static-analysis tools (CodeQL CWE-918) can
-// verify the value is server-controlled.
-func sanitizedBaseURL(scheme, host string) *url.URL {
-	return &url.URL{Scheme: scheme, Host: host}
-}
-
-func healthProbeURL(baseURL *url.URL) string {
-	return (&url.URL{
-		Scheme: baseURL.Scheme,
-		Host:   baseURL.Host,
-		Path:   "/health",
-	}).String()
-}
-
-// isAllowedProbeHost restricts generic health probes to loopback addresses to
-// prevent SSRF when inst.URL is attacker-controlled.
-func isAllowedProbeHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
-}
-
-func isAllowedChildProbeHost(host, bind string) bool {
-	if isAllowedProbeHost(host) {
-		return true
-	}
-	return strings.EqualFold(host, configuredChildInstanceHost(bind))
-}
-
-func configuredChildBind(cfg *config.RuntimeConfig) string {
-	if cfg == nil {
-		return ""
-	}
-	return strings.TrimSpace(cfg.Bind)
-}
-
-func configuredChildInstanceHost(bind string) string {
-	bind = strings.TrimSpace(bind)
-	switch bind {
-	case "", "0.0.0.0", "::":
-		return "localhost"
-	default:
-		return bind
-	}
-}
-
-func httpBaseURL(host, port string) string {
-	return (&url.URL{
-		Scheme: "http",
-		Host:   net.JoinHostPort(host, port),
-	}).String()
-}
-
-func instanceBaseURLs(bind string, port int) []string {
-	portStr := strconv.Itoa(port)
-	candidates := make([]string, 0, 4)
-	seen := make(map[string]struct{}, 4)
-	appendURL := func(host string) {
-		baseURL := httpBaseURL(host, portStr)
-		if _, ok := seen[baseURL]; ok {
-			return
-		}
-		seen[baseURL] = struct{}{}
-		candidates = append(candidates, baseURL)
-	}
-
-	bind = strings.TrimSpace(bind)
-	if bind != "" && bind != "0.0.0.0" && bind != "::" {
-		appendURL(bind)
-	}
-	appendURL("127.0.0.1")
-	appendURL("::1")
-	appendURL("localhost")
-	return candidates
+	return result.TabID, nil
 }

@@ -6,31 +6,33 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"type","ref":"e8","text":"Ada Lovelace"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab type e8 "Ada Lovelace"
-# 响应（使用 --json 获取完整 JSON）
+# Response (use --json for full JSON)
 OK
 ```
 
-## 命令行界面 标志
+## 命令行界面 Flags
 
-| 标志 | 描述 |
+| Flag | 说明 |
 |------|-------------|
+| `--humanize` | 使用拟人化的逐字符按键时序（覆盖实例配置） |
 | `--json` | 完整 JSON 响应 |
 | `--tab` | 目标特定标签页 |
 
 ## 注意事项
 
-- 当你想更直接地设置值时，使用 `fill`
+- 想更直接地设值时用 `fill`
 - 接受统一选择器：`e8`、`#name`、`xpath://input`、`text:Name`
-- 选择器查找仅限于当前框架范围（默认：`main`）
-- 在 iframe 输入前使用 [`/frame`](./frame.md)
-- 缺失的选择器会立即失败；对于异步字段，使用 [`pinchtab wait`](./wait.md)
-- 要在聚焦元素中输入，使用 `keyboard type`
+- selector 查找限于当前 frame 范围（默认 `main`）
+- iframe 输入前用 [`/frame`](./frame.md)
+- 缺失 selector 立即失败；异步字段用 `pinchtab wait`（见 [`commands.md`](../commands.md)）
+- 要向聚焦元素输入，用 `keyboard type`
+- 原始键盘输入是默认。要让一次 type 动作走较慢的拟人化逐字符路径，在动作 JSON 中传 `humanize:true` 或设 `instanceDefaults.humanize:true`。
 
 ## 相关页面
 
-- [框架](./frame.md)
-- [填充](./fill.md) — 直接设置输入值
-- [键盘](./keyboard.md) — 低级键盘输入（在聚焦元素处输入）
-- [快照](./snapshot.md)
+- [Frame](./frame.md)
+- [Fill](./fill.md) — 直接设置输入值
+- [Keyboard](./keyboard.md) — 低层键盘输入（在聚焦元素处输入）
+- [Snapshot](./snapshot.md)

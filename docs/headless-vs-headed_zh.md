@@ -5,7 +5,11 @@ PinchTab 实例可以在两种模式下运行 Chrome：
 - **无头模式**：无可见浏览器窗口
 - **有头模式**：可见浏览器窗口
 
-您通常使用 `pinchtab` 运行一个服务器，然后通过 API 或 命令行界面 以任一模式启动实例。
+您通常用 `pinchtab server` 运行一个服务器，然后通过 API 或命令行界面以任一模式启动实例。
+
+HTTP API 需要服务器 token。本页的 `curl` 示例为简洁起见省略了它；在
+`export PINCHTAB_TOKEN=$(pinchtab config token --stdout)` 之后，再补上
+`-H "Authorization: Bearer $PINCHTAB_TOKEN"`。
 
 ---
 
@@ -17,13 +21,13 @@ PinchTab 实例可以在两种模式下运行 Chrome：
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
-  "profileName": "instance-1741400000000000000",
+  "profileName": "instance-1741400000000000000-9f3c2a1b",
   "port": "9868",
   "mode": "headless",
   "headless": true,
@@ -53,13 +57,13 @@ pinchtab instance start
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --mode headed
-# 响应
+# Response
 {
   "id": "inst_1b9a5dcc",
   "profileId": "prof_278be873",
-  "profileName": "instance-1741400000000000001",
+  "profileName": "instance-1741400000000000001-4d7e0c52",
   "port": "9869",
   "mode": "headed",
   "headless": false,
@@ -105,7 +109,7 @@ pinchtab instance start --mode headed
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headed"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --mode headed
 ```
 
@@ -115,7 +119,7 @@ pinchtab instance start --mode headed
 curl -X POST http://localhost:9867/profiles \
   -H "Content-Type: application/json" \
   -d '{"name":"dev"}'
-# 响应
+# Response
 {
   "status": "created",
   "id": "prof_278be873",
@@ -129,9 +133,9 @@ curl -X POST http://localhost:9867/profiles \
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"profileId":"prof_278be873","mode":"headed"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --profile prof_278be873 --mode headed
-# 响应
+# Response
 {
   "id": "inst_ea2e747f",
   "profileId": "prof_278be873",
@@ -153,7 +157,7 @@ for i in 1 2 3; do
     -H "Content-Type: application/json" \
     -d '{"mode":"headless"}' | jq .
 done
-# 命令行界面 替代方案
+# CLI Alternative
 for i in 1 2 3; do
   pinchtab instance start
 done
@@ -169,7 +173,7 @@ done
 
 ```bash
 curl http://localhost:9867/instances/inst_0a89a5bb/tabs | jq .
-# 响应
+# Response
 [
   {
     "id": "CDP_TARGET_ID",
@@ -191,7 +195,7 @@ curl http://localhost:9867/tabs/CDP_TARGET_ID/text | jq .
 ```
 
 ```bash
-curl http://localhost:9867/tabs/CDP_TARGET_ID/screenshot > page.jpg
+curl "http://localhost:9867/tabs/CDP_TARGET_ID/screenshot?raw=true" > page.jpg
 ```
 
 ---
@@ -207,10 +211,11 @@ curl http://localhost:9867/tabs/CDP_TARGET_ID/screenshot > page.jpg
 ### Linux
 
 无头模式在任何地方都可以工作。
-有头模式需要 X11 或 Wayland。
+有头模式需要 X11 或 Wayland。Chrome 由服务器启动，因此显示必须对 `pinchtab server` 可用，而
+不是对启动实例的命令行界面可用：
 
 ```bash
-ssh -X user@server 'pinchtab instance start --mode headed'
+ssh -X user@server 'pinchtab server'
 ```
 
 ### Windows
@@ -224,7 +229,7 @@ Windows 构建可用，但 Windows 支持目前有限且尽力而为。
 无头模式是容器中的正常选择：
 
 ```bash
-docker run -d -p 9867:9867 pinchtab/pinchtab
+docker run -d -p 127.0.0.1:9867:9867 pinchtab/pinchtab
 curl -X POST http://localhost:9867/instances/start \
   -H "Content-Type: application/json" \
   -d '{"mode":"headless"}'

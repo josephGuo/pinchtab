@@ -1,6 +1,6 @@
 ﻿# 树莓派
 
-只要 Chromium 或 Chrome 可用，PinchTab 就可以在树莓派上运行。当前实现不需要特定于树莓派的功能标志，但由于内存有限，它确实受益于保守的默认值。
+只要 Chromium 或 Chrome 可用，PinchTab 就可以在树莓派上运行。当前实现不需要特定于树莓派的功能 flag，但由于内存有限，它确实受益于保守的默认值。
 
 ## 推荐基线
 
@@ -72,11 +72,13 @@ go build -o pinchtab ./cmd/pinchtab
 }
 ```
 
-使用它运行：
+把它保存为 `/home/pi/.pinchtab/config.json`（这是默认路径，因此不需要 `PINCHTAB_CONFIG`），然后运行：
 
 ```bash
-PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json ./pinchtab
+./pinchtab server
 ```
+
+首次启动会把 `server.token` 生成到该文件中。如果你改为把 `PINCHTAB_CONFIG` 指向别处的一个文件，请自己添加 `server.token`：PinchTab 会拒绝启动，而不会向操作员提供的文件里写入令牌。
 
 ## 无头模式与有头模式
 
@@ -90,7 +92,7 @@ PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json ./pinchtab
 }
 ```
 
-如果您使用桌面会话并想要可见的浏览器，请切换到：
+如果你使用桌面会话并想要可见的浏览器，请切换到：
 
 ```json
 {
@@ -104,7 +106,7 @@ PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json ./pinchtab
 
 ## 存储
 
-如果 SD 卡很小或很慢，将配置文件存储移动到更大的驱动器：
+如果 SD 卡很小或很慢，将 Profile 存储移动到更大的驱动器：
 
 ```json
 {
@@ -133,7 +135,7 @@ After=network.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi
-ExecStart=/home/pi/pinchtab
+ExecStart=/home/pi/pinchtab server
 Environment=PINCHTAB_CONFIG=/home/pi/.pinchtab/config.json
 Restart=always
 RestartSec=10
@@ -156,7 +158,7 @@ sudo systemctl status pinchtab
 - 在 1 GB 和 2 GB 板上保持 `instanceDefaults.maxTabs` 较低
 - 优先使用无头模式
 - 对于大量抓取的工作负载，阻止图像和广告
-- 如果 SD 卡是瓶颈，将配置文件移动到更快的外部存储
+- 如果 SD 卡是瓶颈，将 Profile 移动到更快的外部存储
 - 如果经常遇到 OOM 情况，请谨慎添加交换空间
 
 ## 故障排除

@@ -6,7 +6,7 @@
 
 ```mermaid
 flowchart TD
-    U["Agent / 命令行界面 / Tool"] --> S["PinchTab Server"]
+    U["Agent / CLI / Tool"] --> S["PinchTab Server"]
 
     S --> D["Dashboard + Config + Profiles API"]
     S --> O["Orchestrator + Strategy Layer"]
@@ -39,7 +39,7 @@ flowchart TD
 flowchart LR
     I["Install PinchTab"] --> R["Run: pinchtab server"]
     R --> L["Local server on localhost:9867"]
-    L --> A["Agent / 命令行界面 sends HTTP requests"]
+    L --> A["Agent / CLI sends HTTP requests"]
     A --> W["Browser work happens through PinchTab"]
 ```
 

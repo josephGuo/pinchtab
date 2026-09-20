@@ -36,11 +36,14 @@ pinchtab keyboard inserttext "test@pinchtab.com"
 
 ```bash
 pinchtab keydown Shift
-pinchtab keyboard type "abc"   # 输入 "ABC"（按住 Shift）
 pinchtab keyup Shift
 ```
 
+`keyboard type` 原样发送每个字符的文本，不在其按键事件上设置任何修饰键标志，因此不要指望按住的 `keydown Shift` 能改变输入的文本。要按带修饰的键，使用 [`press`](./press.md) 组合，如 `Shift+ArrowLeft`。
+
 ## API 等价物
+
+`keydown` 和 `keyup` 是带 `key` 字段的 `keydown` / `keyup` 动作种类。
 
 ```bash
 curl -X POST http://localhost:9867/action \

@@ -9,10 +9,13 @@
 使用以下命令启动：
 
 ```bash
-pinchtab
-# 或显式启动
 pinchtab server
+# or run it in the background
+pinchtab daemon install
 ```
+
+直接运行 `pinchtab` 并不会启动服务器：它会打印当前是否有服务器在运行、安全态势以及后续步骤（并在
+首次使用时运行安全设置）。
 
 服务器的功能：
 
@@ -20,6 +23,10 @@ pinchtab server
 - 管理配置文件和实例
 - 将标签页范围的请求代理到正确的管理实例
 - 可以暴露简写路由，如 `/navigate`、`/snapshot` 和 `/action`
+
+HTTP API 需要服务器 token。本页的 `curl` 示例为简洁起见省略了它；在
+`export PINCHTAB_TOKEN=$(pinchtab config token --stdout)` 之后，再补上
+`-H "Authorization: Bearer $PINCHTAB_TOKEN"`。
 
 重要说明：
 
@@ -75,7 +82,7 @@ curl -X POST http://localhost:9867/profiles \
     "name": "work",
     "description": "Main logged-in work profile"
   }'
-# 响应
+# Response
 {
   "status": "created",
   "id": "prof_278be873",
@@ -131,9 +138,9 @@ curl -X POST http://localhost:9867/instances/start \
     "profileId": "prof_278be873",
     "mode": "headed"
   }'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab instance start --profile prof_278be873 --mode headed
-# 响应
+# Response
 {
   "id": "inst_0a89a5bb",
   "profileId": "prof_278be873",
@@ -166,7 +173,7 @@ INST=inst_0a89a5bb
 curl -X POST http://localhost:9867/instances/$INST/tabs/open \
   -H "Content-Type: application/json" \
   -d '{"url":"https://pinchtab.com"}'
-# 响应
+# Response
 {
   "tabId": "CDP_TARGET_ID"
 }
@@ -184,7 +191,20 @@ curl -X POST http://localhost:9867/tabs/$TAB/action \
   -d '{"kind":"click","ref":"e5"}'
 
 curl -X POST http://localhost:9867/tabs/$TAB/close
+
+curl -X POST http://localhost:9867/close \
+  -H "Content-Type: application/json" \
+  -d "{\"tabId\":\"$TAB\"}"
 ```
+
+默认情况下，标签页使用 `keep` 生命周期策略，在读取或动作之后不会自动关闭。把
+`instanceDefaults.tabPolicy.lifecycle` 设为 `close_idle`，即可在一次授权的 `/text`、
+`/snapshot` 或 `/action` 请求结束后自动关闭该标签页。把它设为 `freeze_idle`，则改为在闲置
+延迟之后冻结一个一直没有请求触碰过的标签页：它的定时器和 JavaScript 停止，而其 DOM、会话
+和 URL 仍然存活。对该标签页的每一次请求都会重置这个时钟，并在运行前解冻它；当一个标签页上
+仍有请求在运行（screencast 流也算）、它为交接而暂停、或它持有网络拦截规则时，绝不会被冻结。
+`instanceDefaults.tabPolicy.closeDelaySec` 用于在启用 `close_idle` 或 `freeze_idle` 时调整
+闲置延迟。
 
 ### 标签页是持久的吗？
 
@@ -197,6 +217,10 @@ curl -X POST http://localhost:9867/tabs/$TAB/close
 - 配置文件会持久存在，但打开的标签页不会
 
 这意味着持久的部分是**配置文件状态**，而不是标签页列表。
+
+在某个代理会话下打开的标签页会随它一同结束。当该会话被撤销、过期或被清理时，每个实例会
+关闭该会话创建的标签页——前提是此后没有其他调用方用过它们。它会保留一个为人工交接而暂停、或
+被锁定的标签页，并记录该标签页 id。
 
 ## 元素引用
 
@@ -250,7 +274,7 @@ PinchTab 暴露两种交互风格：
 
 对于大多数用户，以下是正确的顺序：
 
-1. 使用 `pinchtab` 启动服务器
+1. 用 `pinchtab server` 启动服务器（或 `pinchtab daemon install`）
 2. 如果需要持久性，创建配置文件
 3. 从该配置文件启动实例
 4. 在该实例中打开一个或多个标签页

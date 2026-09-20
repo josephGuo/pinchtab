@@ -1,16 +1,14 @@
-﻿# Tailscale 桥接故事：一个编排器，远程浏览器
+﻿# 一个编排器，远程浏览器
 
-有一个简单的分布式 PinchTab 形状，结果非常实用：
+有一个简单的分布式 PinchTab 形态，结果非常实用：
 
 - 机器 A 运行 PinchTab 编排器和仪表板
-- 机器 B 运行 PinchTab 桥接
-- 两台机器通过 Tailscale 连接
+- 机器 B 运行一个 PinchTab bridge
+- 两台机器通过 Tailscale 相连
 - 代理继续与机器 A 通信
 - 浏览器工作实际发生在机器 B 上
 
-这为您提供了一个控制平面和多个浏览器执行可以存在的位置。
-
-![Tailscale 连接的编排器和远程桥接的占位图](../media/tailscale-bridge-topology-placeholder.svg)
+这让你拥有一个控制平面，以及多个可以承载浏览器执行的位置。
 
 ```mermaid
 flowchart LR
@@ -57,7 +55,7 @@ flowchart LR
 - 第二台机器运行桥接，具有更多 CPU、RAM 或更好的浏览器环境
 - 浏览器工作从本地笔记本电脑或台式机移开，但控制保持在本地
 
-当您希望 UI 和控制循环靠近您，但繁重的浏览器工作在其他地方时，这很有用。
+当你希望 UI 和控制循环靠近你，但繁重的浏览器工作在其他地方时，这很有用。
 
 ### 区域本地执行
 
@@ -81,7 +79,7 @@ flowchart LR
 - 一个编排器附加它们
 - 编排器成为小型远程浏览器集群的单一控制表面
 
-这为您提供了轻量级的分布式浏览器设置，而无需添加完整的远程执行平台。
+这为你提供了轻量级的分布式浏览器设置，而无需添加完整的远程执行平台。
 
 ### HTTPS 前端远程桥接
 
@@ -89,7 +87,7 @@ flowchart LR
 - 反向代理或 Tailscale Serve 在其前面终止 TLS
 - 编排器通过 `https://` 源附加桥接
 
-当您希望远程桥接作为普通 TLS 端点而不是原始 HTTP 端口可访问时，这很有用。
+当你希望远程桥接作为普通 TLS 端点而不是原始 HTTP 端口可访问时，这很有用。
 
 所有这些场景都有一个共同点：
 
@@ -101,7 +99,7 @@ flowchart LR
 控制路径如下：
 
 ```text
-代理 -> 机器 A 上的编排器 -> 机器 B 上的桥接 -> 机器 B 上的浏览器
+agent -> orchestrator on machine A -> bridge on machine B -> browser on machine B
 ```
 
 编排器不会 SSH 到远程机器，也不会启动远程进程。它只是使用以下命令附加到已经运行的 PinchTab 桥接：
@@ -120,9 +118,9 @@ POST /instances/attach-bridge
 
 ## 为什么 Tailscale 效果很好
 
-Tailscale 非常适合此模型，因为您不需要将桥接发布到公共互联网。
+Tailscale 非常适合此模型，因为你不需要将桥接发布到公共互联网。
 
-您确实需要桥接在 tailnet 内部可访问，这意味着：
+你确实需要桥接在 tailnet 内部可访问，这意味着：
 
 - 桥接不得仅绑定到 `127.0.0.1`
 - 远程机器必须允许来自 Tailscale 对等点的所选桥接端口的入站流量
@@ -135,18 +133,18 @@ Tailscale 非常适合此模型，因为您不需要将桥接发布到公共互�
 在机器 B 上，配置并启动桥接，使其在 Tailscale 可访问的地址上监听：
 
 ```bash
-# 配置网络访问
+# Configure for network access
 pinchtab config set server.bind 0.0.0.0
 pinchtab config set server.port 9867
 pinchtab config set server.token bridge-secret-token
 
-# 启动桥接
+# Start the bridge
 pinchtab bridge
 ```
 
-这种非环回绑定是有文档记录的、非默认的、降低安全性的部署更改。这里是适当的，因为桥接旨在在您的 tailnet 上可访问。保持桥接令牌设置，不要将端口发布到该受控网络边界之外。
+这种非环回绑定是有文档记录的、非默认的、降低安全性的部署更改。这里是适当的，因为桥接旨在在你的 tailnet 上可访问。保持桥接令牌设置，不要将端口发布到该受控网络边界之外。
 
-如果您使用守护进程或服务管理器，请确保配置文件具有 `bind: "0.0.0.0"`。
+如果你使用守护进程或服务管理器，请确保配置文件具有 `bind: "0.0.0.0"`。
 
 第一个常见错误是将桥接保留在默认的 localhost 绑定上。当发生这种情况时：
 
@@ -201,7 +199,7 @@ curl -H "Authorization: Bearer bridge-secret-token" \
 
 重要细节：
 
-- `allowHosts` 必须包含您计划在 `baseUrl` 中使用的确切主机名或 IP
+- `allowHosts` 必须包含你计划在 `baseUrl` 中使用的确切主机名或 IP
 - `allowSchemes` 必须包含 `http` 或 `https` 以用于 `attach-bridge`
 - `ws` 和 `wss` 仍然与 CDP 附加相关，与桥接附加无关
 - `baseUrl` 必须是裸源，例如 `https://bridge-host:9868`；不要包含凭据、查询字符串、片段或路径
@@ -252,7 +250,7 @@ curl -X POST http://127.0.0.1:9867/instances/attach-bridge \
 }
 ```
 
-这告诉您编排器注册了一个运行中的附加桥接实例，现在将流量路由到它。
+这告诉你编排器注册了一个运行中的附加桥接实例，现在将流量路由到它。
 
 ## 步骤 5：从机器 A 控制远程浏览器
 
@@ -289,7 +287,7 @@ curl -H "Authorization: Bearer orchestrator-token" \
 
 ### 直接桥接端口：通常是 HTTP
 
-如果您在配置中使用 `bind: 0.0.0.0` 和 `port: 9867` 启动桥接：
+如果你在配置中使用 `bind: 0.0.0.0` 和 `port: 9867` 启动桥接：
 
 ```bash
 pinchtab bridge
@@ -309,9 +307,9 @@ http://machine-b.tailnet.ts.net:9867/health
 https://machine-b.tailnet.ts.net:9867/health
 ```
 
-如果您将 `curl` 指向 `https://...:9867` 并收到 TLS 协议错误，这意味着您正在向 HTTP 监听器发送 HTTPS。
+如果你将 `curl` 指向 `https://...:9867` 并收到 TLS 协议错误，这意味着你正在向 HTTP 监听器发送 HTTPS。
 
-### 附件支持 HTTPS
+### 附加支持 HTTPS
 
 编排器确实支持附加到 `https` 桥接源。
 
@@ -346,34 +344,34 @@ https://machine-b.tailnet.ts.net  ->  http://127.0.0.1:9867
 1. 客户端到编排器
 2. 编排器到桥接
 
-这意味着您可以使用不同的令牌：
+这意味着你可以使用不同的令牌：
 
 - 用户和代理向机器 A 发送编排器令牌
 - 机器 A 向机器 B 发送桥接令牌
 
 客户端在桥接附加后不需要桥接令牌。
 
-## 您获得的好处
+## 你获得的好处
 
-此设置为您提供了良好的操作模型：
+此设置为你提供了良好的操作模型：
 
 - 一个编排器可以控制多个远程桥接
 - 浏览器执行可以在 tailnet 中的不同机器上发生
 - 客户端、仪表板和代理不需要知道每个浏览器在哪里运行
 - 即使执行是远程的，实例和标签页路由也保持一致
 
-这是远程桥接附件的真正价值：您可以将浏览器工作移动到正确的机器，而无需更改代理使用的控制表面。
+这是远程桥接附加的真正价值：你可以将浏览器工作移动到正确的机器，而无需更改代理使用的控制表面。
 
 ## 故障排除清单
 
-如果附件失败，请按顺序执行此清单：
+如果附加失败，请按顺序执行此清单：
 
 1. 机器 A 可以直接到达 `baseUrl/health` 吗？
 2. 机器 B 是否绑定到 `0.0.0.0` 而不仅仅是 `127.0.0.1`？
-3. 桥接是否真的在您认为的端口上监听？
-4. 桥接是否需要令牌，您是否发送了正确的令牌？
-5. 机器 A 的 `allowHosts` 是否包含您在 `baseUrl` 中使用的确切主机？
+3. 桥接是否真的在你认为的端口上监听？
+4. 桥接是否需要令牌，你是否发送了正确的令牌？
+5. 机器 A 的 `allowHosts` 是否包含你在 `baseUrl` 中使用的确切主机？
 6. 机器 A 的 `allowSchemes` 是否包含 `http` 或 `https`？
-7. 您是否对直接桥接端口使用 `http`，仅对真实 TLS 端点使用 `https`？
+7. 你是否对直接桥接端口使用 `http`，仅对真实 TLS 端点使用 `https`？
 
 一旦这些正确，`attach-bridge` 就会成为一个简单的注册步骤，而不是网络难题。

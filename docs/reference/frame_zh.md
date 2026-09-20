@@ -17,21 +17,25 @@ curl -X POST http://localhost:9867/frame \
   -H "Content-Type: application/json" \
   -d '{"target":"main"}'
 
-# 命令行界面 替代方案
-pinchtab frame                          # 显示：main（如果有范围则显示 frameId）
-pinchtab frame "#payment-frame"         # 显示：<frameId> (<name>)
-pinchtab frame main                     # 显示：main
-pinchtab frame --json                   # 完整 JSON 响应
+# CLI Alternative
+pinchtab frame                          # Shows: main (or frameId if scoped)
+pinchtab frame "#payment-frame"         # Shows: <frameId> (<name>)
+pinchtab frame main                     # Shows: main
+pinchtab frame --json                   # Full JSON response
 ```
 
 `POST /frame` 和 `pinchtab frame` 接受的目标：
 
 - `main` 清除框架范围
-- iframe 所有者的快照引用
+- iframe 所有者的快照 ref
 - iframe 元素的选择器
 - 框架名称或框架 URL
 
-典型的 iframe 流程：
+响应：`{tabId, scoped, target, current}`——未限定范围时，`target` 和 `current` 均为 `"main"`；限定范围时，`target` 为框架 ID，`current`/`frame` 携带 `{frameId, frameUrl, frameName, ownerRef}`。不带 `target` 的 `POST` 返回 `400`；非 iframe/框架的目标返回 `400`。
+
+MCP：`pinchtab_frame` 接受 `target`（省略则读取当前范围）、`tabId`、`browser`。
+
+典型 iframe 流程（API 形式见 `tests/e2e/scenarios/api/actions-extended.sh`）：
 
 ```bash
 pinchtab snap -i
@@ -47,7 +51,8 @@ pinchtab frame main
 - 选择器范围是显式的；未限定范围的选择器不会自动穿透到 iframes 中
 - 支持同源 iframe 内容；目前不将跨域 iframe 后代暴露为框架范围
 - 嵌套 iframes 通常需要多次 `frame` 跳转
-- 相同的框架范围适用于基于选择器的 `/snapshot` 和 `/action` 调用，以及当未明确提供 `frameId` 时的 `/text`
+- 框架范围适用于 `/snapshot`、`/capture`、基于选择器的 `/action` 调用，以及未显式提供 `frameId` 时的 `/text`
+- 从框架范围提供的读取携带一个 `frame` 对象（`frameId`、`frameUrl`、`frameName`、`ownerRef`、`frameTitle`），使后续读取者能判断该内容不是顶层文档
 - `/evaluate` 是独立的，不继承框架范围
 
 ## 相关页面

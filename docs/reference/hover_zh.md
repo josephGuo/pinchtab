@@ -6,9 +6,9 @@
 curl -X POST http://localhost:9867/action \
   -H "Content-Type: application/json" \
   -d '{"kind":"hover","ref":"e5"}'
-# 命令行界面 替代方案
+# CLI Alternative
 pinchtab hover e5
-# 响应（使用 --json 获取完整 JSON）
+# Response (use --json for full JSON)
 OK
 ```
 
@@ -20,6 +20,7 @@ OK
 |------|-------------|
 | `--css` | 使用 CSS 选择器而不是引用 |
 | `--x`, `--y` | 在特定坐标处悬停 |
+| `--humanize` | 启用人性化贝塞尔曲线 + 抖动输入路径（覆盖实例配置） |
 | `--json` | 完整 JSON 响应 |
 | `--tab` | 目标特定标签页 |
 
