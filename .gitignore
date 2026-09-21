@@ -82,3 +82,5 @@ screenshot-[0-9]*.jpg
 screenshot-[0-9]*.png
 capture-[0-9]*.jpg
 capture-[0-9]*.png
+
+ ~/.pinchtab/
