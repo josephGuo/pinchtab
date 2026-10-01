@@ -46,6 +46,7 @@ type TabManager struct {
 	onTabRemovedHooks []func(tabID string)
 	netMonitor        *NetworkMonitor
 	currentTab        string // ID of the most recently used tab
+	lastStaleSweep    time.Time
 	executor          *TabExecutor
 	guardOnce         sync.Once
 	guardActive       bool
@@ -202,19 +203,25 @@ func (tm *TabManager) createTab(url, browserContextID string) (string, context.C
 	// leaving the browser window's OS focus unchanged. Do not set background=true:
 	// heavy headed SPAs can suspend that target before DOM/AX reads. newWindow
 	// remains false, so no additional OS window is created.
+	//
+	// Target.createTarget is a browser-level command, so it is issued on the
+	// browser connection rather than through tm.browserCtx's own CDP session.
+	// When PinchTab attaches to a browser that is already running, chromedp
+	// binds that session to a tab the user owns; routing this call through it
+	// makes every later tab creation block until the user's tab happens to
+	// outlive the instance.
+	browserExecCtx, err := browserExecutorContext(tm.browserCtx)
+	if err != nil {
+		return "", nil, nil, err
+	}
 	var targetID target.ID
-	createCtx, createCancel := context.WithTimeout(tm.browserCtx, tabCreateTimeout)
-	if err := chromedp.Run(createCtx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			params := target.CreateTarget("about:blank").WithFocus(false)
-			if browserContextID != "" {
-				params = params.WithBrowserContextID(cdp.BrowserContextID(browserContextID))
-			}
-			var err error
-			targetID, err = params.Do(ctx)
-			return err
-		}),
-	); err != nil {
+	createCtx, createCancel := context.WithTimeout(browserExecCtx, tabCreateTimeout)
+	params := target.CreateTarget("about:blank").WithFocus(false)
+	if browserContextID != "" {
+		params = params.WithBrowserContextID(cdp.BrowserContextID(browserContextID))
+	}
+	targetID, err = params.Do(createCtx)
+	if err != nil {
 		createCancel()
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", nil, nil, fmt.Errorf("create tab: browser did not open a new tab within %s — it may be out of memory or overloaded (close tabs or restart the instance)", tabCreateTimeout)

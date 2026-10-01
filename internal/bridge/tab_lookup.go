@@ -77,10 +77,37 @@ func (tm *TabManager) AccessedTabIDs() map[string]bool {
 	return out
 }
 
+// staleSweepInterval bounds how often resolving a tab pays for a target list.
+// The sweep exists to stop a dead tab being handed out forever, not to make
+// every action re-check the browser.
+const staleSweepInterval = 2 * time.Second
+
+// sweepStaleTabsIfDue drops tabs the browser no longer has, at most once per
+// staleSweepInterval. Tab selection runs on every request, so an unthrottled
+// sweep would add a CDP round trip to each one.
+func (tm *TabManager) sweepStaleTabsIfDue() {
+	if tm == nil {
+		return
+	}
+	tm.mu.Lock()
+	if len(tm.tabs) == 0 || time.Since(tm.lastStaleSweep) < staleSweepInterval {
+		tm.mu.Unlock()
+		return
+	}
+	tm.lastStaleSweep = time.Now()
+	tm.mu.Unlock()
+
+	tm.dropTabsTheBrowserNoLongerHas()
+}
+
 func (tm *TabManager) TabContext(tabID string) (context.Context, string, error) {
 	if tm == nil {
 		return nil, "", fmt.Errorf("tab manager not initialized")
 	}
+	// Selecting a tab that is already gone returns a context whose calls block
+	// until their deadline, which is how an attached instance used to wedge for
+	// good once the user closed the wrong tab (issue #690).
+	tm.sweepStaleTabsIfDue()
 	if tabID == "" {
 		tm.mu.RLock()
 		tabID = tm.selectCurrentTrackedTab()
